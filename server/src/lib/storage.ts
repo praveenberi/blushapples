@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { config } from '../config';
+import { HttpError } from './http';
 
 /** Storage abstraction: swap providers via STORAGE_PROVIDER without touching callers. */
 export interface StorageProvider {
@@ -46,9 +47,10 @@ class CloudinaryStorage implements StorageProvider {
     form.append('overwrite', 'true');
     form.append('api_key', this.c.apiKey);
     form.append('signature', signature);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${this.c.cloudName}/image/upload`, { method: 'POST', body: form });
-    const json: any = await res.json();
-    if (!res.ok) throw new Error(`Cloudinary upload failed: ${json?.error?.message || res.status}`);
+    let res: Response;
+    try { res = await fetch(`https://api.cloudinary.com/v1_1/${this.c.cloudName}/image/upload`, { method: 'POST', body: form }); } catch (e: any) { throw new HttpError(502, `Could not reach Cloudinary: ${e.message}`); }
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok) throw new HttpError(502, `Image storage (Cloudinary) rejected the upload: ${json?.error?.message || res.status}`);
     return { url: json.secure_url as string };
   }
   async remove(key: string) {
@@ -64,7 +66,7 @@ export function storage(): StorageProvider {
   if (!instance) {
     if (config.storage.provider === 'cloudinary') {
       const c = config.storage.cloudinary;
-      if (!c.cloudName || !c.apiKey || !c.apiSecret) throw new Error('Cloudinary selected but CLOUDINARY_* env vars are missing');
+      if (!c.cloudName || !c.apiKey || !c.apiSecret) throw new HttpError(500, 'Cloudinary is selected but CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET are not all set on the server');
       instance = new CloudinaryStorage();
     } else instance = new LocalStorage();
   }
