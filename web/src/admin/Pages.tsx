@@ -27,9 +27,17 @@ const sectionFields: FieldDef[] = [
 ];
 
 function SectionsManager({ page }: { page: 'home' | 'about' }) {
-  return <ResourceManager key={page} title={page === 'home' ? 'Home section' : 'About section'} sub="Drag rows to reorder. Hidden sections stay saved." endpoint={`/admin/sections?page=${page}`} reorderable wide
+  const toast = useToast();
+  const [n, setN] = useState(0);
+  const restore = async () => {
+    try { const r = await api.post('/admin/sections/restore-defaults', { page }); toast(r.added ? `Added ${r.added} missing section(s) at the bottom. Drag them into place.` : 'Nothing missing: all default sections already exist.'); setN((x) => x + 1); } catch (e) { toast(errorMessage(e), 'err'); }
+  };
+  return (<>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 bg-nude/50 p-3 text-sm"><span>Page looks empty or missing parts? Add back any default sections you don't have yet. Your existing sections are never changed.</span><button className="btn btn-outline btn-sm" onClick={restore}>Restore missing default sections</button></div>
+    <ResourceManager key={page + n} title={page === 'home' ? 'Home section' : 'About section'} sub="Drag rows to reorder. Hidden sections stay saved." endpoint={`/admin/sections?page=${page}`} reorderable wide
     blank={{ page, type: page === 'home' ? 'text' : 'image_text', name: '', visible: true, content: {} }} fields={sectionFields}
-    columns={[{ label: 'Section', render: (r) => <span><strong>{r.name || r.type}</strong><span className="block text-xs text-charcoal/50">{SECTION_TYPES.find(([k]) => k === r.type)?.[1]} · {r.content?.heading}</span></span> }, { label: 'Visible', render: (r) => <Bool v={r.visible} /> }]} />;
+    columns={[{ label: 'Section', render: (r) => <span><strong>{r.name || r.type}</strong><span className="block text-xs text-charcoal/50">{SECTION_TYPES.find(([k]) => k === r.type)?.[1]} · {r.content?.heading}</span></span> }, { label: 'Visible', render: (r) => <Bool v={r.visible} /> }]} />
+  </>);
 }
 
 function Faqs() {

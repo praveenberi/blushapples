@@ -35,7 +35,7 @@ function Header() {
     <header className={`fixed inset-x-0 top-0 z-50 transition-colors duration-500 ${solid ? 'bg-ivory/95 shadow-[0_1px_0_rgb(var(--c-charcoal)/0.08)] backdrop-blur' : 'bg-transparent'}`}>
       <div className="container-x flex h-16 items-center justify-between sm:h-20">
         <Link to="/" className="flex items-center gap-3" aria-label={`${brand.name || 'Home'}`}>
-          {brand.logo ? <img src={brand.logo} alt={brand.name} className={`h-12 w-auto rounded-theme transition-colors sm:h-16 ${light ? 'brightness-0 invert drop-shadow-[0_1px_6px_rgba(0,0,0,0.25)]' : ''}`} /> : <span className={`font-heading text-2xl tracking-wide transition-colors sm:text-[28px] ${light ? 'text-white' : ''}`}>{brand.name || 'Blush & Apples'}</span>}
+          {(brand.logo || '/logo.png') ? <img src={brand.logo || '/logo.png'} alt={brand.name} className={`h-12 w-auto rounded-theme transition-colors sm:h-16 ${light ? 'brightness-0 invert drop-shadow-[0_1px_6px_rgba(0,0,0,0.25)]' : ''}`} /> : <span className={`font-heading text-2xl tracking-wide transition-colors sm:text-[28px] ${light ? 'text-white' : ''}`}>{brand.name || 'Blush & Apples'}</span>}
         </Link>
         <nav className="hidden items-center gap-8 lg:flex" aria-label="Main">
           {nav.map((n) => (

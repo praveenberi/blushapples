@@ -66,6 +66,16 @@ export function resourceRouter() {
     schema: z.object({ label: str(60).min(1), href: str(300).min(1), area: z.enum(['header', 'footer']), visible: z.boolean().optional(), sort_order: sort }),
   }));
 
+  /** Adds any default section types the page is missing (e.g. after a failed first-run seed). Never edits or removes existing sections. */
+  r.post('/sections/restore-defaults', requirePerm('content'), ah(async (req, res) => {
+    const { page } = parse(z.object({ page: z.enum(['home', 'about']) }), req.body);
+    const [{ n }] = await req.db.q<{ n: number }>('SELECT count(*)::int AS n FROM page_sections WHERE page=$1', [page]);
+    await insertDefaultSections(req.db.q, true, [page]);
+    const [{ m }] = await req.db.q<{ m: number }>('SELECT count(*)::int AS m FROM page_sections WHERE page=$1', [page]);
+    await audit(req, 'restore_defaults', 'page_sections', page);
+    res.json({ added: m - n });
+  }));
+
   r.use('/sections', crudRouter({
     table: 'page_sections', perm: 'content', touch: true, filters: ['page'], order: 'page, sort_order, id',
     cols: { page: 'text', type: 'text', name: 'text', content: 'json', visible: 'bool', sort_order: 'int' },
@@ -92,6 +102,7 @@ export function resourceRouter() {
 }
 
 import { ah, audit, HttpError, parse } from '../lib/http';
+import { insertDefaultSections } from '../seed';
 import { requirePerm } from '../lib/auth';
 
 /** notification_templates use a text primary key, so they get a small dedicated router. */

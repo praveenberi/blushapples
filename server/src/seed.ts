@@ -51,6 +51,28 @@ async function placeholder(i: number, label: string, mono = false) {
   return img.toBuffer();
 }
 
+/** Default home/about sections. With onlyMissing it adds just the section types a page does not have yet. */
+export async function insertDefaultSections(q: Db['q'], onlyMissing: boolean, pages: string[] = ['home', 'about']) {
+  const sec = async (page: string, type: string, name: string, content: object, order: number) => {
+    if (!pages.includes(page)) return;
+    if (onlyMissing && (await q('SELECT 1 FROM page_sections WHERE page=$1 AND type=$2 LIMIT 1', [page, type])).length) return;
+    await q('INSERT INTO page_sections(page,type,name,content,sort_order) VALUES ($1,$2,$3,$4::jsonb,$5)', [page, type, name, j(content), onlyMissing ? order + 100 : order]);
+  };
+  await sec('home', 'hero', 'Hero', { eyebrow: 'Professional Makeup Artist', heading: 'Beauty, beautifully told.', body: 'Bespoke bridal, editorial and event makeup that looks like you, only more radiant.', image: '', video: '', ctaLabel: 'Book an appointment', ctaHref: '/book', secondaryLabel: 'Explore portfolio', secondaryHref: '/portfolio', showWhatsapp: true }, 1);
+  await sec('home', 'featured_gallery', 'Featured looks', { eyebrow: 'Portfolio', heading: 'Featured looks', body: 'A selection of recent work.' }, 2);
+  await sec('home', 'services', 'Popular services', { eyebrow: 'Services', heading: 'Popular services', body: 'From natural glow to full glam.' }, 3);
+  await sec('home', 'before_after', 'Transformations', { eyebrow: 'Transformations', heading: 'Before & after', body: 'Drag the slider to see the difference.' }, 4);
+  await sec('home', 'story', 'Brand story', { eyebrow: 'The artist', heading: 'Artistry with intention', body: 'Demo biography: replace this with your story. Years of experience, a love of skin-first beauty and an eye for what makes each client shine.', image: '', ctaLabel: 'Read my story', ctaHref: '/about' }, 5);
+  await sec('home', 'testimonials', 'Testimonials', { eyebrow: 'Kind words', heading: 'Loved by clients' }, 6);
+  await sec('home', 'promotions', 'Offers', { eyebrow: 'Offers', heading: 'Current offers' }, 7);
+  await sec('home', 'instagram', 'Instagram', { eyebrow: 'Follow along', heading: 'On Instagram' }, 8);
+  await sec('home', 'contact', 'Contact', { eyebrow: 'Get in touch', heading: 'Let us plan your look', body: 'Message on WhatsApp, call, or send an enquiry.' }, 9);
+  await sec('about', 'image_text', 'Introduction', { eyebrow: 'About', heading: 'Hello, I am your makeup artist', body: 'Demo biography: tell clients who you are, how you work and what they can expect.\n\nReplace this text, the photo and every section from Admin > Content.', image: '' }, 1);
+  await sec('about', 'list', 'Qualifications', { heading: 'Qualifications & certifications', items: ['Professional makeup certification (demo)', 'Bridal & editorial masterclass (demo)', '10+ years experience (demo)'] }, 2);
+  await sec('about', 'text', 'Philosophy', { heading: 'Makeup philosophy', body: 'Skin first, always. Makeup should feel like you, only more radiant (demo text).' }, 3);
+  await sec('about', 'list', 'Awards', { heading: 'Awards & recognition', items: ['Demo award or feature', 'Demo publication'] }, 4);
+}
+
 export interface SeedOptions { adminPassword?: string; adminEmail?: string; resetAdmin?: boolean; demo?: boolean; demoImages?: boolean }
 
 /** Idempotent: safe to run on every start. Only the first run inserts demo content. */
@@ -163,7 +185,7 @@ export async function seed(db: Db, opts: SeedOptions = {}) {
   }
   const [album] = await q<any>(`INSERT INTO gallery_albums(title,slug,description) VALUES ('Demo portfolio','demo-portfolio','Placeholder images. Replace with your own work.') RETURNING id`);
 
-  if (opts.demoImages !== false) {
+  if (opts.demoImages !== false) try {
     const urls: string[] = [];
     for (let i = 0; i < 20; i++) {
       const cat = GALLERY_CATS[i % GALLERY_CATS.length];
@@ -181,6 +203,8 @@ export async function seed(db: Db, opts: SeedOptions = {}) {
     }
     const svcs = await q<any>('SELECT id FROM services ORDER BY sort_order');
     for (let i = 0; i < svcs.length; i++) await q('UPDATE services SET image_url=$1 WHERE id=$2', [urls[i % urls.length], svcs[i].id]);
+  } catch (e: any) {
+    console.warn(`Demo images skipped: ${e?.message || e}`);
   }
 
   const reviews: [string, string, string][] = [
@@ -201,21 +225,7 @@ export async function seed(db: Db, opts: SeedOptions = {}) {
     await q('INSERT INTO social_links(platform,url,username,icon,sort_order) VALUES ($1,$2,$3,$4,(SELECT COALESCE(MAX(sort_order),0)+1 FROM social_links))', [p, u, name, p.toLowerCase()]);
   }
 
-  const sec = (page: string, type: string, name: string, content: object, order: number) =>
-    q('INSERT INTO page_sections(page,type,name,content,sort_order) VALUES ($1,$2,$3,$4::jsonb,$5)', [page, type, name, j(content), order]);
-  await sec('home', 'hero', 'Hero', { eyebrow: 'Professional Makeup Artist', heading: 'Beauty, beautifully told.', body: 'Bespoke bridal, editorial and event makeup that looks like you, only more radiant.', image: '', video: '', ctaLabel: 'Book an appointment', ctaHref: '/book', secondaryLabel: 'Explore portfolio', secondaryHref: '/portfolio', showWhatsapp: true }, 1);
-  await sec('home', 'featured_gallery', 'Featured looks', { eyebrow: 'Portfolio', heading: 'Featured looks', body: 'A selection of recent work.' }, 2);
-  await sec('home', 'services', 'Popular services', { eyebrow: 'Services', heading: 'Popular services', body: 'From natural glow to full glam.' }, 3);
-  await sec('home', 'before_after', 'Transformations', { eyebrow: 'Transformations', heading: 'Before & after', body: 'Drag the slider to see the difference.' }, 4);
-  await sec('home', 'story', 'Brand story', { eyebrow: 'The artist', heading: 'Artistry with intention', body: 'Demo biography: replace this with your story. Years of experience, a love of skin-first beauty and an eye for what makes each client shine.', image: '', ctaLabel: 'Read my story', ctaHref: '/about' }, 5);
-  await sec('home', 'testimonials', 'Testimonials', { eyebrow: 'Kind words', heading: 'Loved by clients' }, 6);
-  await sec('home', 'promotions', 'Offers', { eyebrow: 'Offers', heading: 'Current offers' }, 7);
-  await sec('home', 'instagram', 'Instagram', { eyebrow: 'Follow along', heading: 'On Instagram' }, 8);
-  await sec('home', 'contact', 'Contact', { eyebrow: 'Get in touch', heading: 'Let us plan your look', body: 'Message on WhatsApp, call, or send an enquiry.' }, 9);
-  await sec('about', 'image_text', 'Introduction', { eyebrow: 'About', heading: 'Hello, I am your makeup artist', body: 'Demo biography: tell clients who you are, how you work and what they can expect.\n\nReplace this text, the photo and every section from Admin > Content.', image: '' }, 1);
-  await sec('about', 'list', 'Qualifications', { heading: 'Qualifications & certifications', items: ['Professional makeup certification (demo)', 'Bridal & editorial masterclass (demo)', '10+ years experience (demo)'] }, 2);
-  await sec('about', 'text', 'Philosophy', { heading: 'Makeup philosophy', body: 'Skin first, always. Makeup should feel like you, only more radiant (demo text).' }, 3);
-  await sec('about', 'list', 'Awards', { heading: 'Awards & recognition', items: ['Demo award or feature', 'Demo publication'] }, 4);
+  await insertDefaultSections(q, false);
 
   return { generatedPassword, seededDemo: true };
 }
