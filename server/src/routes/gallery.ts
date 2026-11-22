@@ -30,6 +30,15 @@ export async function fetchBuffer(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
+/** SQL expression: is this image URL referenced anywhere on the site? */
+const IN_USE = (u: string) => `
+  EXISTS (SELECT 1 FROM page_sections s WHERE position(${u} in s.content::text) > 0)
+  OR EXISTS (SELECT 1 FROM website_settings w WHERE position(${u} in w.value::text) > 0)
+  OR EXISTS (SELECT 1 FROM services s WHERE s.deleted_at IS NULL AND (s.image_url = ${u} OR position(${u} in s.gallery::text) > 0))
+  OR EXISTS (SELECT 1 FROM promotions p WHERE p.banner_url = ${u})
+  OR EXISTS (SELECT 1 FROM testimonials t WHERE t.image_url = ${u})
+  OR EXISTS (SELECT 1 FROM gallery_albums a WHERE a.cover_url = ${u})`;
+
 const rid = () => crypto.randomBytes(5).toString('hex');
 const num = z.number().min(-100).max(100).optional();
 const paramsSchema = z.object({
@@ -98,7 +107,27 @@ export function galleryRouter() {
   r.post('/asset', requirePerm(), upload.single('file'), ah(async (req, res) => {
     if (!req.file) throw new HttpError(400, 'No valid image received');
     const v = await storeImageVariants(req.file.buffer, req.file.originalname.replace(/\.[^.]+$/, ''), 'assets');
+    await req.db.q('INSERT INTO media_assets(url,thumb_url,original_url,storage_key,filename,width,height) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (url) DO NOTHING',
+      [v.displayUrl, v.thumbUrl, v.originalUrl, v.storageKey, req.file.originalname.slice(0, 200), v.width, v.height]);
     res.status(201).json({ url: v.displayUrl, thumb_url: v.thumbUrl, original_url: v.originalUrl, width: v.width, height: v.height });
+  }));
+
+  /** Media library: every image uploaded for page sections, logos, services, etc. */
+  r.get('/media', requirePerm(), ah(async (req, res) => {
+    res.json(await req.db.q(`SELECT m.*, (${IN_USE('m.url')}) AS in_use FROM media_assets m ORDER BY m.id DESC LIMIT 500`));
+  }));
+
+  r.delete('/media/:id', requirePerm(), ah(async (req, res) => {
+    const p = req.user!.permissions;
+    if (!p.includes('*') && !p.includes('gallery') && !p.includes('content')) throw new HttpError(403, 'You do not have permission to delete images');
+    const [m] = await req.db.q<any>('SELECT * FROM media_assets WHERE id=$1', [Number(req.params.id)]);
+    if (!m) throw new HttpError(404, 'Not found');
+    const [u] = await req.db.q<any>(`SELECT (${IN_USE('$1')}) AS in_use`, [m.url]);
+    if (u.in_use && req.query.force !== 'true') throw new HttpError(409, 'This image is still used on the website');
+    await removeVariants(m.storage_key).catch(() => {});
+    await req.db.q('DELETE FROM media_assets WHERE id=$1', [m.id]);
+    await audit(req, 'delete', 'media_assets', m.id, { url: m.url });
+    res.json({ ok: true });
   }));
 
   r.get('/ai/capabilities', g, (_req, res) => {

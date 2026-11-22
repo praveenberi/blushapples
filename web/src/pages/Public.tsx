@@ -12,7 +12,16 @@ export function Home() {
   const { site } = useSite();
   // Hero sections always render first, even if one was added later and so sits lower in the admin list.
   const all = site?.sections.filter((s) => s.page === 'home') || [];
-  const secs = [...all.filter((s) => s.type === 'hero'), ...all.filter((s) => s.type !== 'hero')];
+  // If several hero sections exist (e.g. one added only to hold images), merge them into ONE hero:
+  // text and buttons from the first hero that has a heading, images gathered from all of them.
+  const heroes = all.filter((s) => s.type === 'hero');
+  let hero = heroes[0];
+  if (heroes.length > 1) {
+    const base = heroes.find((h) => h.content.heading) || heroes[0];
+    const images = [...new Set(heroes.flatMap((h) => [...(Array.isArray(h.content.images) ? h.content.images : []), h.content.image]).filter(Boolean))] as string[];
+    hero = { ...base, content: { ...base.content, ...(images.length ? { images, image: '' } : {}) } };
+  }
+  const secs = [...(hero ? [hero] : []), ...all.filter((s) => s.type !== 'hero')];
   if (!secs.length) return <Empty title="Welcome" body="Add sections to the home page from the admin dashboard." />;
   return <>{secs.map((s) => <SectionRenderer key={s.id} s={s} />)}</>;
 }

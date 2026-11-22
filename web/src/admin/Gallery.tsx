@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorMessage } from '../lib/api';
 import { BeforeAfter, ErrorNote, Modal, PageLoader, Spinner } from '../components/ui';
-import { Bool, Confirm, Fields, PageHeader, ResourceManager, useLoad, useToast, type FieldDef } from './kit';
+import { Bool, Confirm, Fields, MediaLibrary, PageHeader, ResourceManager, useLoad, useToast, type FieldDef } from './kit';
 
 /* ============================== Photo Studio ============================== */
 interface Params {
@@ -279,18 +279,31 @@ function Library() {
 }
 
 export default function GalleryAdmin() {
-  const [tab, setTab] = useState<'images' | 'categories' | 'albums'>('images');
+  const [tab, setTab] = useState<'images' | 'uploads' | 'categories' | 'albums'>('images');
   return (
     <div>
       <PageHeader title="Gallery & Photo Studio" sub="Open any image to edit its details or enhance it in the Photo studio." />
-      <div className="mb-5 flex gap-1 border-b border-charcoal/10">{(['images', 'categories', 'albums'] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-4 py-2 text-xs uppercase tracking-widest ${tab === t ? 'border-gold' : 'border-transparent text-charcoal/50'}`}>{t}</button>)}</div>
+      <div className="mb-5 flex gap-1 border-b border-charcoal/10">{(['images', 'uploads', 'categories', 'albums'] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-4 py-2 text-xs uppercase tracking-widest ${tab === t ? 'border-gold' : 'border-transparent text-charcoal/50'}`}>{t}</button>)}</div>
       {tab === 'images' && <Library />}
+      {tab === 'uploads' && <UploadsTab />}
       {tab === 'categories' && <ResourceManager title="Category" endpoint="/admin/gallery-categories" reorderable blank={{ name: '', slug: '', visible: true }}
         fields={[{ key: 'name', label: 'Name', required: true, half: true }, { key: 'slug', label: 'URL slug', half: true }, { key: 'visible', label: 'Visibility', type: 'bool', help: 'Shown as a filter on the website' }]}
         columns={[{ label: 'Name', render: (r) => r.name }, { label: 'Visible', render: (r) => <Bool v={r.visible} /> }]} />}
       {tab === 'albums' && <ResourceManager title="Album" endpoint="/admin/albums" reorderable blank={{ title: '', slug: '', description: '', cover_url: null, visible: true }}
         fields={[{ key: 'title', label: 'Title', required: true, half: true }, { key: 'slug', label: 'URL slug', half: true }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'cover_url', label: 'Cover image', type: 'image' }, { key: 'visible', label: 'Visibility', type: 'bool', help: 'Shown on website' }]}
         columns={[{ label: 'Cover', render: (r) => r.cover_url ? <img src={r.cover_url} alt="" className="h-10 w-10 object-cover" /> : '-' }, { label: 'Title', render: (r) => r.title }, { label: 'Visible', render: (r) => <Bool v={r.visible} /> }]} />}
+    </div>
+  );
+}
+
+function UploadsTab() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="admin-card p-8 text-center">
+      <p className="font-heading text-2xl">Uploaded images</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-charcoal/60">Images you upload for the hero, logo, services, offers and more are kept here. See what is in use and delete the ones you no longer need.</p>
+      <button className="btn btn-solid btn-sm mt-5" onClick={() => setOpen(true)}>Open media library</button>
+      <MediaLibrary open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

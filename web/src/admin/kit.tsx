@@ -47,9 +47,52 @@ export const setPath = (o: any, p: string, v: any) => {
   return copy;
 };
 
+/** Every image uploaded for sections/logo/services. Pick one (when onPick is given) or delete unused ones. */
+export function MediaLibrary({ open, onClose, onPick, multiple }: { open: boolean; onClose: () => void; onPick?: (urls: string[]) => void; multiple?: boolean }) {
+  const toast = useToast();
+  const { data, loading, error, reload } = useLoad<any[]>(open ? '/admin/gallery/media' : null, [open]);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [del, setDel] = useState<{ item: any; force: boolean } | null>(null);
+  useEffect(() => { if (open) setChosen([]); }, [open]);
+  const toggle = (u: string) => {
+    if (!onPick) return;
+    if (!multiple) { onPick([u]); onClose(); return; }
+    setChosen((c) => (c.includes(u) ? c.filter((x) => x !== u) : [...c, u]));
+  };
+  const remove = async () => {
+    const { item, force } = del!;
+    try { await api.del(`/admin/gallery/media/${item.id}${force ? '?force=true' : ''}`); toast('Image deleted'); setDel(null); reload(); }
+    catch (e: any) { if (e?.status === 409 && !force) setDel({ item, force: true }); else { toast(errorMessage(e), 'err'); setDel(null); } }
+  };
+  return (
+    <>
+      <Modal open={open} onClose={onClose} title="Media library" wide>
+        <ErrorNote message={error} />
+        {loading ? <PageLoader /> : !data?.length ? <p className="py-10 text-center text-charcoal/60">No uploaded images yet. Images you upload for the hero, logo, services and more appear here.</p> : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {data.map((m) => (
+              <div key={m.id} className={`group relative border bg-paper ${chosen.includes(m.url) ? 'border-gold ring-2 ring-gold' : 'border-charcoal/10'}`}>
+                <button type="button" onClick={() => toggle(m.url)} className="block w-full" aria-label={onPick ? `Use ${m.filename || 'image'}` : m.filename || 'image'}>
+                  <img src={m.thumb_url} onError={(e) => { (e.target as HTMLImageElement).src = m.url; }} alt={m.filename} loading="lazy" className="aspect-square w-full bg-nude/50 object-contain" />
+                </button>
+                <div className="flex items-center justify-between gap-1 p-1.5 text-[11px]">
+                  <span className="truncate text-charcoal/55">{m.in_use ? 'In use' : 'Unused'} · {m.filename || 'image'}</span>
+                  <button type="button" onClick={() => setDel({ item: m, force: false })} className="shrink-0 px-1 text-rose hover:underline" aria-label="Delete image">Delete</button>
+                </div>
+              </div>))}
+          </div>)}
+        {onPick && multiple && <div className="mt-5 flex justify-end gap-2 border-t border-charcoal/10 pt-4"><button className="btn btn-outline btn-sm" onClick={onClose}>Cancel</button><button className="btn btn-solid btn-sm" disabled={!chosen.length} onClick={() => { onPick(chosen); onClose(); }}>Add {chosen.length || ''} selected</button></div>}
+      </Modal>
+      <Confirm open={!!del} confirmLabel="Delete image" onNo={() => setDel(null)} onYes={remove}
+        message={del?.force ? 'This image is still used on the website. Deleting it will leave a blank spot until you choose another. Delete anyway?' : 'Delete this image permanently? This cannot be undone.'} />
+    </>
+  );
+}
+
 export function ImageField({ value, onChange, label }: { value?: string | null; onChange: (u: string | null) => void; label: string }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [lib, setLib] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const pick = async (f?: File) => {
     if (!f) return;
@@ -62,8 +105,10 @@ export function ImageField({ value, onChange, label }: { value?: string | null; 
       <div className="flex flex-col gap-1.5">
         <input ref={input} type="file" hidden accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
         <button type="button" className="btn btn-outline btn-sm" onClick={() => input.current?.click()} disabled={busy}>{busy ? <Spinner /> : value ? 'Replace' : 'Upload'}</button>
+        <button type="button" className="text-left text-xs text-gold hover:underline" onClick={() => setLib(true)}>Choose from library</button>
         {value && <button type="button" className="text-left text-xs text-rose hover:underline" onClick={() => onChange(null)}>Remove</button>}
       </div>
+      <MediaLibrary open={lib} onClose={() => setLib(false)} onPick={(u) => onChange(u[0])} />
     </div>
   );
 }
@@ -72,6 +117,7 @@ export function ImageField({ value, onChange, label }: { value?: string | null; 
 export function MultiImageField({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [lib, setLib] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const add = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -95,8 +141,10 @@ export function MultiImageField({ value, onChange }: { value: string[]; onChange
             </div>
           </div>))}
         <input ref={input} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
-        <button type="button" disabled={busy} onClick={() => input.current?.click()} className="grid h-24 w-24 place-items-center border border-dashed border-charcoal/30 text-xs text-charcoal/60 hover:border-gold">{busy ? <Spinner /> : '+ Add images'}</button>
+        <button type="button" disabled={busy} onClick={() => input.current?.click()} className="grid h-24 w-24 place-items-center border border-dashed border-charcoal/30 text-xs text-charcoal/60 hover:border-gold">{busy ? <Spinner /> : '+ Upload'}</button>
+        <button type="button" onClick={() => setLib(true)} className="grid h-24 w-24 place-items-center border border-dashed border-gold/60 text-xs text-gold hover:bg-gold/10">From library</button>
       </div>
+      <MediaLibrary open={lib} multiple onClose={() => setLib(false)} onPick={(urls) => onChange([...value, ...urls.filter((u) => !value.includes(u))])} />
     </div>
   );
 }
