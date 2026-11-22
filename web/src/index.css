@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --c-blush: 243 217 212; --c-nude: 233 220 207; --c-gold: 184 147 90; --c-ivory: 251 247 242;
+  --c-rose: 185 122 128; --c-charcoal: 43 38 38; --c-white: 255 255 255;
+  --font-heading: 'Cormorant Garamond'; --font-body: 'Jost'; --radius: 2px; --section-y: 112px;
+}
+
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { @apply bg-ivory text-charcoal font-body antialiased; margin: 0; }
+h1, h2, h3, h4 { @apply font-heading font-medium; letter-spacing: -0.01em; }
+img { max-width: 100%; }
+::selection { background: rgb(var(--c-blush)); }
+:focus-visible { outline: 2px solid rgb(var(--c-gold)); outline-offset: 2px; }
+
+@layer components {
+  .eyebrow { @apply text-[11px] uppercase tracking-eyebrow text-gold font-medium; }
+  .btn { @apply inline-flex items-center justify-center gap-2 px-7 py-3.5 text-[13px] uppercase tracking-[0.14em] font-medium transition-colors duration-300 rounded-theme select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-solid { @apply bg-charcoal text-paper hover:bg-gold; }
+  .btn-gold { @apply bg-gold text-paper hover:bg-charcoal; }
+  .btn-outline { @apply border border-charcoal/70 text-charcoal hover:bg-charcoal hover:text-paper; }
+  .btn-ghost { @apply text-charcoal/80 hover:text-gold px-3; }
+  .btn-sm { @apply px-4 py-2 text-[11px]; }
+  .input { @apply w-full bg-paper border border-charcoal/15 rounded-theme px-3.5 py-2.5 text-[15px] focus:border-gold focus:outline-none transition-colors placeholder:text-charcoal/35; }
+  .label { @apply block text-[12px] uppercase tracking-[0.12em] text-charcoal/60 mb-1.5; }
+  .section-y { padding-top: var(--section-y); padding-bottom: var(--section-y); }
+  .container-x { @apply mx-auto w-full max-w-7xl px-5 sm:px-8; }
+}
+
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* admin */
+.admin-card { @apply bg-paper border border-charcoal/10 rounded-theme; }
+.admin-th { @apply text-left text-[11px] uppercase tracking-[0.12em] text-charcoal/50 font-medium px-3 py-2; }
+.admin-td { @apply px-3 py-2.5 text-sm border-t border-charcoal/10 align-middle; }
+.badge { @apply inline-block px-2 py-0.5 text-[11px] rounded-full bg-nude text-charcoal/80; }
