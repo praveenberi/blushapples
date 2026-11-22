@@ -51,7 +51,7 @@ async function placeholder(i: number, label: string, mono = false) {
   return img.toBuffer();
 }
 
-export interface SeedOptions { adminPassword?: string; demo?: boolean; demoImages?: boolean }
+export interface SeedOptions { adminPassword?: string; adminEmail?: string; resetAdmin?: boolean; demo?: boolean; demoImages?: boolean }
 
 /** Idempotent: safe to run on every start. Only the first run inserts demo content. */
 export async function seed(db: Db, opts: SeedOptions = {}) {
@@ -63,7 +63,15 @@ export async function seed(db: Db, opts: SeedOptions = {}) {
   if (!existingAdmin) {
     const pw = opts.adminPassword || config.seed.adminPassword || (generatedPassword = crypto.randomBytes(9).toString('base64url') + '7a');
     const [role] = await q<any>(`SELECT id FROM roles WHERE name='admin'`);
-    await q('INSERT INTO users(email,name,password_hash,role_id) VALUES ($1,$2,$3,$4)', [config.seed.adminEmail, 'Site Admin', await hashPassword(pw), role.id]);
+    await q('INSERT INTO users(email,name,password_hash,role_id) VALUES ($1,$2,$3,$4)', [opts.adminEmail || config.seed.adminEmail, 'Site Admin', await hashPassword(pw), role.id]);
+  } else if (opts.resetAdmin ?? config.seed.resetAdmin) {
+    // One-time recovery: set the first administrator's email and password from the environment.
+    const pw = opts.adminPassword || config.seed.adminPassword;
+    if (pw) {
+      await q(`UPDATE users SET email=$1, password_hash=$2, active=true, deleted_at=NULL, updated_at=now()
+        WHERE id=(SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE r.name='admin' ORDER BY u.id LIMIT 1)`, [opts.adminEmail || config.seed.adminEmail, await hashPassword(pw)]);
+      console.log('Administrator account reset from ADMIN_EMAIL / ADMIN_PASSWORD. Remove RESET_ADMIN now.');
+    }
   }
 
   const [initialised] = await q(`SELECT 1 FROM website_settings WHERE key='brand'`);

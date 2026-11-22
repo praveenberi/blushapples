@@ -49,6 +49,7 @@ export const config = {
   },
   seed: {
     adminEmail: env.ADMIN_EMAIL || 'admin@example.com',
+    resetAdmin: env.RESET_ADMIN === 'true',
     adminPassword: env.ADMIN_PASSWORD || '',
   },
 };
