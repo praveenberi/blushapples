@@ -68,13 +68,14 @@ export function createApp(db: Db, opts: { webDist?: string } = {}) {
   }
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found')));
-  const onError: ErrorRequestHandler = (err, _req, res, _next) => {
+  const onError: ErrorRequestHandler = (err, req, res, _next) => {
     if (err instanceof HttpError) return void res.status(err.status).json({ error: err.message, details: err.details });
     if (err?.name === 'MulterError') return void res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (15MB max)' : err.message });
     if (err?.type === 'entity.parse.failed') return void res.status(400).json({ error: 'Invalid JSON' });
     if (err?.status === 404) return void res.status(404).json({ error: 'Not found' });
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong' });
+    // Signed-in staff get the real reason (no secrets are ever in these messages); visitors get a generic one.
+    res.status(500).json({ error: req.user ? `Server error: ${String(err?.message || err).slice(0, 300)}` : 'Something went wrong' });
   };
   app.use(onError);
   return app;
