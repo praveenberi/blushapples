@@ -10,7 +10,9 @@ import { PromoCard, SectionRenderer, ServiceCard } from './sections';
 export function Home() {
   useSeo('home');
   const { site } = useSite();
-  const secs = site?.sections.filter((s) => s.page === 'home') || [];
+  // Hero sections always render first, even if one was added later and so sits lower in the admin list.
+  const all = site?.sections.filter((s) => s.page === 'home') || [];
+  const secs = [...all.filter((s) => s.type === 'hero'), ...all.filter((s) => s.type !== 'hero')];
   if (!secs.length) return <Empty title="Welcome" body="Add sections to the home page from the admin dashboard." />;
   return <>{secs.map((s) => <SectionRenderer key={s.id} s={s} />)}</>;
 }
