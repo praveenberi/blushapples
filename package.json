@@ -12,12 +12,9 @@
     "start": "npm run start -w server",
     "migrate": "npm run migrate -w server",
     "seed": "npm run seed -w server",
-    "test": "npm test -w server",
-    "deploy": "wrangler deploy"
+    "test": "npm test -w server"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "@cloudflare/containers": "^0.0.13",
-    "wrangler": "^4.20.0"
+    "concurrently": "^8.2.2"
   }
 }
