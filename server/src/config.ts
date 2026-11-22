@@ -14,6 +14,8 @@ export const config = {
   isProd,
   isTest: env.NODE_ENV === 'test',
   port: Number(env.PORT || 4000),
+  cronSecret: env.CRON_SECRET || '',
+  trustProxy: Number(env.TRUST_PROXY || 1),
   publicUrl: env.PUBLIC_URL || 'http://localhost:5173',
   jwtSecret: env.JWT_SECRET || 'dev-only-secret-change-me-dev-only-secret',
   databaseUrl: env.DATABASE_URL || '',

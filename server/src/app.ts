@@ -16,10 +16,12 @@ import { resourceRouter } from './routes/resources';
 import { servicesRouter } from './routes/services';
 import { renderPage } from './lib/seoRender';
 import { ah } from './lib/http';
+import crypto from 'crypto';
+import { runReminders } from './lib/reminders';
 
 export function createApp(db: Db, opts: { webDist?: string } = {}) {
   const app = express();
-  app.set('trust proxy', 1);
+  app.set('trust proxy', config.trustProxy);
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     hsts: config.isProd,
@@ -38,6 +40,12 @@ export function createApp(db: Db, opts: { webDist?: string } = {}) {
   app.use(loadUser);
 
   app.use('/uploads', express.static(config.uploadDir, { maxAge: '30d', immutable: true, fallthrough: false, setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff') }));
+  // Called by the Cloudflare cron trigger (containers can sleep, so the in-process timer is not enough).
+  app.post('/api/internal/reminders', ah(async (req, res) => {
+    const given = Buffer.from(String(req.header('x-cron-secret') || '')), want = Buffer.from(config.cronSecret);
+    if (!want.length || given.length !== want.length || !crypto.timingSafeEqual(given, want)) throw new HttpError(403, 'Forbidden');
+    res.json({ sent: await runReminders(db) });
+  }));
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
   app.use('/api/auth', authRouter());
   app.use('/api/public', publicRouter(), publicBookingRouter());

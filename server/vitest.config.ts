@@ -4,7 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   test: {
-    env: { NODE_ENV: 'test', UPLOAD_DIR: path.join(os.tmpdir(), 'blush-apples-test-uploads'), DATABASE_URL: '' },
+    env: { NODE_ENV: 'test', UPLOAD_DIR: path.join(os.tmpdir(), 'blush-apples-test-uploads'), DATABASE_URL: '', CRON_SECRET: 'test-cron-secret' },
     testTimeout: 60_000,
     hookTimeout: 120_000,
     pool: 'forks',

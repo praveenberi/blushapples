@@ -104,3 +104,22 @@ Be aware of these before going live:
   layout animations, `MotionConfig reducedMotion="user"`).
 - Only the API is covered by automated tests; the React UI was verified by hand in a browser, not by an automated suite.
 - No Postgres-specific verification: tests run on PGlite. Run the suite against your production Postgres version before launch.
+
+## Deploying on Cloudflare (Containers)
+
+The whole app (site, API, SEO rendering, photo studio) runs as one container behind a Worker (`wrangler.jsonc`, `worker/index.ts`).
+Requires the Workers **Paid** plan (Containers is in beta) and Docker running on the machine you deploy from.
+
+```powershell
+npm install
+npx wrangler login
+# set each secret once (paste the value when asked):
+npx wrangler secret put DATABASE_URL
+# ...repeat for JWT_SECRET, PUBLIC_URL, ADMIN_EMAIL, ADMIN_PASSWORD, CRON_SECRET, CLOUDINARY_*, SMTP_*
+npx wrangler deploy
+```
+
+A cron trigger runs every 15 minutes: it wakes the container and sends appointment reminders via `POST /api/internal/reminders` (protected by `CRON_SECRET`).
+
+**Deploying from GitHub (Workers Builds):** Create the project from the repo with the root directory left as `/`, build command empty,
+deploy command `npx wrangler deploy`. Add the variables and secrets under Settings > Variables and Secrets. Wrangler needs Node 22+ locally; Cloudflare's builder provides it.

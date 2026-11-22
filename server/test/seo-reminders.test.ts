@@ -44,6 +44,16 @@ describe('server-rendered SEO', () => {
   });
 });
 
+describe('cron endpoint', () => {
+  it('rejects missing or wrong secrets and accepts the right one', async () => {
+    expect((await request(app).post('/api/internal/reminders')).status).toBe(403);
+    expect((await request(app).post('/api/internal/reminders').set('x-cron-secret', 'nope')).status).toBe(403);
+    const ok = await request(app).post('/api/internal/reminders').set('x-cron-secret', 'test-cron-secret');
+    expect(ok.status).toBe(200);
+    expect(typeof ok.body.sent).toBe('number');
+  });
+});
+
 describe('appointment reminders', () => {
   async function booking(daysAhead: number, startMin: number, status = 'confirmed') {
     const now = localNow('America/New_York');
