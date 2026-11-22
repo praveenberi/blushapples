@@ -40,7 +40,7 @@ export function crudRouter(spec: CrudSpec) {
 
   r.get('/', guard, ah(async (req, res) => {
     const where: string[] = [], p: any[] = [];
-    for (const f of spec.filters || []) if (typeof req.query[f] === 'string') { p.push(req.query[f]); where.push(`t.${f}=${p.length}`); }
+    for (const f of spec.filters || []) if (typeof req.query[f] === 'string') { p.push(req.query[f]); where.push(`t.${f}=$${p.length}`); }
     res.json(await req.db.q(`${base} WHERE 1=1 ${notDeleted} ${where.map((w) => 'AND ' + w).join(' ')} ORDER BY ${order}`, p));
   }));
 

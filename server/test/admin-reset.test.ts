@@ -24,6 +24,20 @@ describe('admin recovery', () => {
   });
 });
 
+describe('sections list filter', () => {
+  it('lists sections per page through the HTTP endpoint', async () => {
+    const agent = request.agent(createApp(db));
+    await agent.post('/api/auth/login').send({ email: 'adminapple@blushapples.com', password: 'NewPassw0rd!!' });
+    const home = await agent.get('/api/admin/sections?page=home');
+    expect(home.status).toBe(200);
+    expect(home.body.length).toBeGreaterThan(0);
+    expect(home.body.every((s: any) => s.page === 'home')).toBe(true);
+    const about = await agent.get('/api/admin/sections?page=about');
+    expect(about.status).toBe(200);
+    expect(about.body.every((s: any) => s.page === 'about')).toBe(true);
+  });
+});
+
 describe('restore default sections', () => {
   it('adds only missing section types and never duplicates', async () => {
     const app = createApp(db);
