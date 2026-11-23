@@ -51,10 +51,10 @@ function Hero({ c }: { c: Record<string, any> }) {
         {c.video ? <video className="h-full w-full object-cover" src={c.video} autoPlay muted loop playsInline poster={img} />
           : cur ? (
             <AnimatePresence initial={false}>
-              <motion.img key={cur} src={cur} alt="" className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1.4, ease: 'easeInOut' }} />
+              <motion.img key={cur} src={cur} alt="" className="absolute inset-0 h-full w-full object-cover object-[78%_25%] sm:object-center" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1.4, ease: 'easeInOut' }} />
             </AnimatePresence>
           ) : <div className="h-full w-full bg-gradient-to-br from-blush via-nude to-ivory" />}
-        <div className="absolute inset-0 bg-gradient-to-t from-charcoal/55 via-charcoal/15 to-transparent sm:bg-gradient-to-r sm:from-charcoal/50 sm:via-charcoal/10 sm:to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-charcoal/70 via-charcoal/10 via-55% to-transparent sm:bg-gradient-to-r sm:from-charcoal/50 sm:via-charcoal/10 sm:to-transparent" />
       </motion.div>
       {!c.video && slides.length > 1 && (
         <div className="absolute bottom-24 right-5 z-10 flex gap-2 sm:bottom-8 sm:right-8" role="tablist" aria-label="Hero images">
