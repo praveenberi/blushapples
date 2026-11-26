@@ -220,21 +220,23 @@ export function ResourceManager({ title, sub, endpoint, fields, columns, blank, 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [del, setDel] = useState<any | null>(null);
+  // The list URL may carry a filter (?page=about); item URLs must be built without it.
+  const base = endpoint.split('?')[0];
 
   const save = async () => {
     setSaving(true); setErr(null);
     try {
       if ('slug' in edit && !edit.slug) edit.slug = slugify(edit.name || edit.title || '');
-      if (edit.id) await api.put(`${endpoint}/${edit.id}`, edit); else await api.post(endpoint, edit);
+      if (edit.id) await api.put(`${base}/${edit.id}`, edit); else await api.post(base, edit);
       toast('Saved'); setEdit(null); reload();
     } catch (e) { setErr(errorMessage(e)); } finally { setSaving(false); }
   };
   const remove = async () => {
-    try { await api.del(`${endpoint}/${del.id}`); toast('Deleted'); setDel(null); reload(); } catch (e) { toast(errorMessage(e), 'err'); setDel(null); }
+    try { await api.del(`${base}/${del.id}`); toast('Deleted'); setDel(null); reload(); } catch (e) { toast(errorMessage(e), 'err'); setDel(null); }
   };
   const reorder = async (rows: any[]) => {
     setData(rows);
-    try { await api.post(`${endpoint}/reorder`, { ids: rows.map((r) => r.id) }); } catch (e) { toast(errorMessage(e), 'err'); reload(); }
+    try { await api.post(`${base}/reorder`, { ids: rows.map((r) => r.id) }); } catch (e) { toast(errorMessage(e), 'err'); reload(); }
   };
 
   return (
