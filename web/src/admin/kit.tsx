@@ -2,6 +2,7 @@ import { AnimatePresence, motion, Reorder } from 'framer-motion';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, errorMessage, slugify } from '../lib/api';
 import { ErrorNote, Modal, PageLoader, Spinner } from '../components/ui';
+import { urlToFile, useUploadEditor } from '../components/UploadEditor';
 
 /* ---------------- auth + toast ---------------- */
 export interface AdminUser { id: number; email: string; name: string; role: string; permissions: string[] }
@@ -94,10 +95,23 @@ export function ImageField({ value, onChange, label }: { value?: string | null; 
   const [busy, setBusy] = useState(false);
   const [lib, setLib] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const pick = async (f?: File) => {
-    if (!f) return;
+  const { edit, editor } = useUploadEditor();
+  const send = async (f: File) => {
     setBusy(true);
     try { const r = await api.upload('/admin/gallery/asset', [f], {}, undefined, 'file'); onChange(r.url); } catch (e) { toast(errorMessage(e), 'err'); } finally { setBusy(false); }
+  };
+  const pick = async (f?: File) => {
+    if (!f) return;
+    const [chosen] = await edit([f]);
+    if (chosen) await send(chosen);
+  };
+  /** Edits the current image and saves the result as a new upload; the old one stays in the library. */
+  const reEdit = async () => {
+    try {
+      const current = await urlToFile(value!);
+      const [chosen] = await edit([current]);
+      if (chosen && chosen !== current) await send(chosen);
+    } catch (e) { toast(errorMessage(e), 'err'); }
   };
   return (
     <div className="flex items-center gap-3">
@@ -105,10 +119,12 @@ export function ImageField({ value, onChange, label }: { value?: string | null; 
       <div className="flex flex-col gap-1.5">
         <input ref={input} type="file" hidden accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
         <button type="button" className="btn btn-outline btn-sm" onClick={() => input.current?.click()} disabled={busy}>{busy ? <Spinner /> : value ? 'Replace' : 'Upload'}</button>
+        {value && <button type="button" className="text-left text-xs text-gold hover:underline" onClick={reEdit} disabled={busy}>Crop &amp; enhance</button>}
         <button type="button" className="text-left text-xs text-gold hover:underline" onClick={() => setLib(true)}>Choose from library</button>
         {value && <button type="button" className="text-left text-xs text-rose hover:underline" onClick={() => onChange(null)}>Remove</button>}
       </div>
       <MediaLibrary open={lib} onClose={() => setLib(false)} onPick={(u) => onChange(u[0])} />
+      {editor}
     </div>
   );
 }
@@ -119,11 +135,23 @@ export function MultiImageField({ value, onChange }: { value: string[]; onChange
   const [busy, setBusy] = useState(false);
   const [lib, setLib] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const add = async (files: FileList | null) => {
-    if (!files?.length) return;
+  const { edit, editor } = useUploadEditor();
+  const reEdit = async (i: number) => {
+    try {
+      const current = await urlToFile(value[i]);
+      const [chosen] = await edit([current]);
+      if (!chosen || chosen === current) return;
+      setBusy(true);
+      const { url } = await api.upload('/admin/gallery/asset', [chosen], {}, undefined, 'file');
+      onChange(value.map((u, n) => (n === i ? url : u)));
+    } catch (e) { toast(errorMessage(e), 'err'); } finally { setBusy(false); }
+  };
+  const add = async (picked: File[]) => {
+    const files = await edit(picked);
+    if (!files.length) return;
     setBusy(true);
     const urls: string[] = [];
-    try { for (const f of Array.from(files)) urls.push((await api.upload('/admin/gallery/asset', [f], {}, undefined, 'file')).url); } catch (e) { toast(errorMessage(e), 'err'); }
+    try { for (const f of files) urls.push((await api.upload('/admin/gallery/asset', [f], {}, undefined, 'file')).url); } catch (e) { toast(errorMessage(e), 'err'); }
     if (urls.length) onChange([...value, ...urls]);
     setBusy(false);
   };
@@ -134,17 +162,19 @@ export function MultiImageField({ value, onChange }: { value: string[]; onChange
         {value.map((u, i) => (
           <div key={u + i} className="w-24">
             <img src={u} alt={`Slide ${i + 1}`} className="h-24 w-24 object-cover" />
+            <button type="button" disabled={busy} onClick={() => reEdit(i)} className="mt-1 block w-full text-[11px] text-gold hover:underline">Crop &amp; enhance</button>
             <div className="mt-1 flex justify-between text-xs">
               <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move earlier" className="px-1.5 disabled:opacity-30">←</button>
               <button type="button" onClick={() => onChange(value.filter((_, n) => n !== i))} aria-label="Remove" className="px-1.5 text-rose">✕</button>
               <button type="button" disabled={i === value.length - 1} onClick={() => move(i, 1)} aria-label="Move later" className="px-1.5 disabled:opacity-30">→</button>
             </div>
           </div>))}
-        <input ref={input} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
+        <input ref={input} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => { add(Array.from(e.target.files || [])); e.target.value = ''; }} />
         <button type="button" disabled={busy} onClick={() => input.current?.click()} className="grid h-24 w-24 place-items-center border border-dashed border-charcoal/30 text-xs text-charcoal/60 hover:border-gold">{busy ? <Spinner /> : '+ Upload'}</button>
         <button type="button" onClick={() => setLib(true)} className="grid h-24 w-24 place-items-center border border-dashed border-gold/60 text-xs text-gold hover:bg-gold/10">From library</button>
       </div>
       <MediaLibrary open={lib} multiple onClose={() => setLib(false)} onPick={(urls) => onChange([...value, ...urls.filter((u) => !value.includes(u))])} />
+      {editor}
     </div>
   );
 }

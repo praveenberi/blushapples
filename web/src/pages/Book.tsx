@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../lib/api';
 import { fmtDuration, priceLabel, track, useSite, whatsappUrl } from '../lib/site';
 import { useSeo } from '../lib/seo';
+import { useUploadEditor } from '../components/UploadEditor';
 import { ErrorNote, Icon, Img, PageLoader, Spinner } from '../components/ui';
 
 const STEPS = ['Service', 'Add-ons', 'Date & time', 'Your details', 'Event', 'Review'];
@@ -57,6 +58,7 @@ export default function Book() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<any | null>(null);
+  const { edit, editor } = useUploadEditor();
 
   useEffect(() => { api.get('/public/services').then((s) => { const b = s.filter((x: any) => x.bookable); setServices(b); const pre = Number(params.get('service')); if (pre && b.some((x: any) => x.id === pre)) setSel([pre]); }).catch(() => setServices([])); }, []); // eslint-disable-line
 
@@ -86,10 +88,11 @@ export default function Book() {
   const go = (n: number) => { setDir(n > step ? 1 : -1); setErr(null); setStep(n); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const valid = [sel.length > 0, true, !!date && !!time, customer.name.trim().length > 1 && /^[+\d][\d\s().-]{5,}$/.test(customer.phone) && /\S+@\S+\.\S+/.test(customer.email), event.people >= 1 && (event.locationType === 'studio' || event.venue.trim().length > 2), true][step];
 
-  const uploadRef = async (list: FileList | null) => {
-    if (!list) return;
+  const uploadRef = async (picked: File[]) => {
+    const chosen = await edit(picked.slice(0, 6 - refs.length));
+    if (!chosen.length) return;
     setErr(null);
-    try { for (const f of Array.from(list).slice(0, 6 - refs.length)) { const r = await api.upload('/public/upload', [f], {}, undefined, 'file'); setRefs((x) => [...x, r.url]); } } catch (e) { setErr(errorMessage(e)); }
+    try { for (const f of chosen) { const r = await api.upload('/public/upload', [f], {}, undefined, 'file'); setRefs((x) => [...x, r.url]); } } catch (e) { setErr(errorMessage(e)); }
   };
 
   const submit = async () => {
@@ -171,7 +174,8 @@ export default function Book() {
                     <div><label className="label" htmlFor="b-hair">Hairstyling requirements</label><input id="b-hair" className="input" value={event.hairstyling} onChange={(e) => setEvent({ ...event, hairstyling: e.target.value })} /></div></div>
                   <div><label className="label" htmlFor="b-req">Special requests</label><textarea id="b-req" rows={3} className="input" value={event.specialRequests} onChange={(e) => setEvent({ ...event, specialRequests: e.target.value })} /></div>
                   <div><label className="label" htmlFor="b-notes">Additional notes</label><textarea id="b-notes" rows={2} className="input" value={event.notes} onChange={(e) => setEvent({ ...event, notes: e.target.value })} /></div>
-                  <div><label className="label" htmlFor="b-ref">Reference images</label><input id="b-ref" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => uploadRef(e.target.files)} className="text-sm" />
+                  <div><label className="label" htmlFor="b-ref">Reference images</label><input id="b-ref" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => { uploadRef(Array.from(e.target.files || [])); e.target.value = ''; }} className="text-sm" />
+                    {editor}
                     <div className="mt-2 flex gap-2">{refs.map((u) => <img key={u} src={u} alt="Reference" className="h-14 w-14 object-cover" />)}</div></div></div></div>)}
 
                 {step === 5 && (<div><h1 className="mb-6 text-4xl">Review & confirm</h1>

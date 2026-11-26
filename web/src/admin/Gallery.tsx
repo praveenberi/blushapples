@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorMessage } from '../lib/api';
 import { BeforeAfter, ErrorNote, Modal, PageLoader, Spinner } from '../components/ui';
 import { Bool, Confirm, Fields, MediaLibrary, PageHeader, ResourceManager, useLoad, useToast, type FieldDef } from './kit';
+import { useUploadEditor } from '../components/UploadEditor';
 
 /* ============================== Photo Studio ============================== */
 interface Params {
@@ -206,12 +207,15 @@ function Library() {
   const [dragId, setDragId] = useState<number | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { edit, editor } = useUploadEditor();
 
   const upload = useCallback(async (files: File[]) => {
     const imgs = files.filter((f) => /^image\/(jpeg|png|webp|avif)$/.test(f.type));
     if (imgs.length < files.length) toast(`${files.length - imgs.length} file(s) skipped (JPEG, PNG, WebP, AVIF only)`, 'err');
     if (!imgs.length) return;
-    const batches: File[][] = []; for (let i = 0; i < imgs.length; i += 5) batches.push(imgs.slice(i, i + 5));
+    const ready = await edit(imgs);
+    if (!ready.length) return;
+    const batches: File[][] = []; for (let i = 0; i < ready.length; i += 5) batches.push(ready.slice(i, i + 5));
     let done = 0; const errors: string[] = [];
     setUploading({ done: 0, total: imgs.length, pct: 0 });
     for (const b of batches) {
@@ -223,7 +227,7 @@ function Library() {
     }
     setUploading(null); reload();
     errors.length ? toast(errors.slice(0, 2).join(' | '), 'err') : toast(`${imgs.length} image(s) uploaded`);
-  }, [upCat, upAlbum, reload, toast]);
+  }, [upCat, upAlbum, reload, toast, edit]);
 
   const bulk = async (action: string, extra: object = {}) => {
     try { await api.post('/admin/gallery/bulk', { ids: [...sel], action, ...extra }); toast('Done'); setSel(new Set()); reload(); } catch (e) { toast(errorMessage(e), 'err'); }
@@ -273,6 +277,7 @@ function Library() {
             </motion.div>))}
         </div>)}
       <Modal open={open !== null} onClose={() => setOpen(null)} title="Image" wide>{open !== null && <ImageEditor id={open} categories={cats.data || []} albums={albums.data || []} onClose={() => setOpen(null)} onChanged={reload} />}</Modal>
+      {editor}
       <Confirm open={confirmDel} message={`Delete ${sel.size} image(s) from the gallery?`} onNo={() => setConfirmDel(false)} onYes={() => { setConfirmDel(false); bulk('delete'); }} />
     </div>
   );

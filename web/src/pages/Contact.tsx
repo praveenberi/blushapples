@@ -3,6 +3,7 @@ import { api, errorMessage } from '../lib/api';
 import { Icon, ErrorNote, Reveal, Spinner } from '../components/ui';
 import { track, useSite, whatsappUrl } from '../lib/site';
 import { useSeo } from '../lib/seo';
+import { useUploadEditor } from '../components/UploadEditor';
 
 export function ContactForm({ compact }: { compact?: boolean }) {
   const { site } = useSite();
@@ -12,13 +13,15 @@ export function ContactForm({ compact }: { compact?: boolean }) {
   const [files, setFiles] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const services = site?.featuredServices || [];
+  const { edit, editor } = useUploadEditor();
 
-  const upload = async (list: FileList | null) => {
-    if (!list?.length) return;
+  const upload = async (picked: File[]) => {
+    const chosen = await edit(picked.slice(0, 3));
+    if (!chosen.length) return;
     setUploading(true); setErr(null);
     try {
       const urls: string[] = [];
-      for (const f of Array.from(list).slice(0, 3)) urls.push((await api.upload('/public/upload', [f], {}, undefined, 'file')).url);
+      for (const f of chosen) urls.push((await api.upload('/public/upload', [f], {}, undefined, 'file')).url);
       setFiles((x) => [...x, ...urls].slice(0, 5));
     } catch (e) { setErr(errorMessage(e)); } finally { setUploading(false); }
   };
@@ -50,7 +53,8 @@ export function ContactForm({ compact }: { compact?: boolean }) {
       <div><label className="label" htmlFor="c-msg">Message *</label><textarea id="c-msg" name="message" required minLength={5} rows={compact ? 4 : 6} className="input" /></div>
       <div>
         <label className="label" htmlFor="c-file">Reference photos (optional)</label>
-        <input id="c-file" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={(e) => upload(e.target.files)} className="text-sm" />
+        <input id="c-file" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={(e) => { upload(Array.from(e.target.files || [])); e.target.value = ''; }} className="text-sm" />
+        {editor}
         {uploading && <Spinner className="ml-2 align-middle" />}
         {files.length > 0 && <div className="mt-2 flex gap-2">{files.map((u) => <img key={u} src={u} alt="Reference" className="h-14 w-14 object-cover" />)}</div>}
       </div>
