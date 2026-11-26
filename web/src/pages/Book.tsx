@@ -66,6 +66,8 @@ export default function Book() {
   const duration = [...chosen, ...chosenAddons].reduce((n, x) => n + x.duration_min, 0);
   const subtotal = [...chosen, ...chosenAddons].reduce((n, x) => n + x.price_cents, 0);
   const hasCustom = chosen.some((s) => s.price_type === 'custom');
+  // A total is only shown when every chosen service publishes a duration, otherwise it would be misleading.
+  const showDuration = chosen.every((s) => s.duration_min > 0);
   const key = `${sel.join(',')}|${addons.join(',')}|${event.locationType}`;
 
   useEffect(() => { setDate(''); setTime(''); setSlots(null); }, [key]);
@@ -136,15 +138,15 @@ export default function Book() {
                     <label key={s.id} className={`flex cursor-pointer gap-4 border bg-paper p-3 transition-colors ${sel.includes(s.id) ? 'border-gold' : 'border-transparent hover:border-charcoal/20'}`}>
                       <input type="checkbox" className="sr-only" checked={sel.includes(s.id)} onChange={() => setSel((x) => (x.includes(s.id) ? x.filter((i) => i !== s.id) : [...x, s.id]))} />
                       <Img src={s.image_url} alt="" className="h-20 w-20 shrink-0" />
-                      <span className="flex-1"><span className="block font-heading text-xl">{s.name}</span><span className="block text-xs text-charcoal/55">{s.category_name} · {fmtDuration(s.duration_min)}</span><span className="mt-1 block text-sm">{priceLabel(s, money)}</span></span>
+                      <span className="flex-1"><span className="block font-heading text-xl">{s.name}</span><span className="block text-xs text-charcoal/55">{[s.category_name, fmtDuration(s.duration_min)].filter(Boolean).join(' · ')}</span><span className="mt-1 block text-sm">{priceLabel(s, money)}</span></span>
                       <span aria-hidden className={`mt-1 grid h-5 w-5 shrink-0 place-items-center border text-xs ${sel.includes(s.id) ? 'border-gold bg-gold text-paper' : 'border-charcoal/30'}`}>{sel.includes(s.id) && '✓'}</span>
                     </label>))}</div></div>)}
 
                 {step === 1 && (<div><h1 className="mb-6 text-4xl">Add-ons</h1>
                   {!availableAddons.length ? <p className="text-charcoal/60">No add-ons for your selection. Continue to choose a date.</p> : <div className="space-y-3">{availableAddons.map((a) => (
                     <label key={a.id} className={`flex cursor-pointer items-center justify-between gap-4 border bg-paper p-4 ${addons.includes(a.id) ? 'border-gold' : 'border-transparent'}`}>
-                      <span><span className="block">{a.name}</span><span className="text-xs text-charcoal/55">{a.service} · +{fmtDuration(a.duration_min)}</span></span>
-                      <span className="flex items-center gap-3"><span>{money(a.price_cents)}</span><input type="checkbox" checked={addons.includes(a.id)} onChange={() => setAddons((x) => (x.includes(a.id) ? x.filter((i) => i !== a.id) : [...x, a.id]))} className="h-4 w-4 accent-[rgb(var(--c-gold))]" /></span>
+                      <span><span className="block">{a.name}</span><span className="text-xs text-charcoal/55">{a.service}{a.duration_min > 0 && ` · +${fmtDuration(a.duration_min)}`}</span></span>
+                      <span className="flex items-center gap-3">{a.price_cents > 0 && <span>{money(a.price_cents)}</span>}<input type="checkbox" checked={addons.includes(a.id)} onChange={() => setAddons((x) => (x.includes(a.id) ? x.filter((i) => i !== a.id) : [...x, a.id]))} className="h-4 w-4 accent-[rgb(var(--c-gold))]" /></span>
                     </label>))}</div>}</div>)}
 
                 {step === 2 && (<div><h1 className="mb-6 text-4xl">Pick a date & time</h1>
@@ -174,7 +176,7 @@ export default function Book() {
 
                 {step === 5 && (<div><h1 className="mb-6 text-4xl">Review & confirm</h1>
                   <dl className="divide-y divide-charcoal/10 bg-paper p-5 text-sm">
-                    {[['Services', chosen.map((s) => s.name).join(', ')], ['Add-ons', chosenAddons.map((a) => a.name).join(', ') || 'None'], ['When', `${date} at ${time} (${fmtDuration(duration)})`], ['Where', LOCATIONS.find(([v]) => v === event.locationType)![1] + (event.venue ? `: ${event.venue}` : '')], ['Name', customer.name], ['Contact', `${customer.phone} · ${customer.email}`], ['People', String(event.people)]].map(([k, v]) => (
+                    {[['Services', chosen.map((s) => s.name).join(', ')], ['Add-ons', chosenAddons.map((a) => a.name).join(', ') || 'None'], ['When', `${date} at ${time}${showDuration ? ` (${fmtDuration(duration)})` : ''}`], ['Where', LOCATIONS.find(([v]) => v === event.locationType)![1] + (event.venue ? `: ${event.venue}` : '')], ['Name', customer.name], ['Contact', `${customer.phone} · ${customer.email}`], ['People', String(event.people)]].map(([k, v]) => (
                       <div key={k} className="flex justify-between gap-4 py-2.5"><dt className="text-charcoal/55">{k}</dt><dd className="text-right">{v}</dd></div>))}</dl>
                   <div className="mt-4"><label className="label" htmlFor="b-promo">Promo code</label><input id="b-promo" className="input uppercase" value={promo} onChange={(e) => setPromo(e.target.value)} placeholder="Optional" /></div>
                   <p className="mt-4 text-xs text-charcoal/55">{site?.settings.policies?.cancellation} <Link className="underline" to="/policy/cancellation" target="_blank">Full policy</Link></p></div>)}
@@ -189,9 +191,10 @@ export default function Book() {
           </div>
           <aside className="h-fit bg-paper p-5 md:sticky md:top-28" aria-label="Summary">
             <p className="eyebrow mb-3">Your booking</p>
-            {!chosen.length ? <p className="text-sm text-charcoal/50">Select a service to begin.</p> : (<ul className="space-y-2 text-sm">{[...chosen, ...chosenAddons].map((x: any, i) => <li key={i} className="flex justify-between gap-3"><span>{x.name}</span><span>{x.price_type === 'custom' ? 'Quote' : money(x.price_cents)}</span></li>)}</ul>)}
-            {chosen.length > 0 && <div className="mt-4 border-t border-charcoal/10 pt-3 text-sm"><div className="flex justify-between"><span className="text-charcoal/60">Duration</span><span>{fmtDuration(duration)}</span></div>
-              <div className="mt-1 flex justify-between font-heading text-xl"><span>Total</span><span>{hasCustom ? 'To be quoted' : money(subtotal)}</span></div></div>}
+            {!chosen.length ? <p className="text-sm text-charcoal/50">Select a service to begin.</p> : (<ul className="space-y-2 text-sm">{[...chosen, ...chosenAddons].map((x: any, i) => <li key={i} className="flex justify-between gap-3"><span>{x.name}</span><span>{x.price_type === 'custom' ? 'Quote' : x.price_cents > 0 ? money(x.price_cents) : ''}</span></li>)}</ul>)}
+            {chosen.length > 0 && (showDuration || hasCustom || subtotal > 0) && <div className="mt-4 border-t border-charcoal/10 pt-3 text-sm">
+              {showDuration && <div className="flex justify-between"><span className="text-charcoal/60">Duration</span><span>{fmtDuration(duration)}</span></div>}
+              {(hasCustom || subtotal > 0) && <div className="mt-1 flex justify-between font-heading text-xl"><span>Total</span><span>{hasCustom ? 'To be quoted' : money(subtotal)}</span></div>}</div>}
             {date && time && <p className="mt-3 text-sm text-gold">{date} · {time}</p>}
           </aside>
         </div>

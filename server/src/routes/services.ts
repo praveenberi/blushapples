@@ -12,7 +12,7 @@ export const serviceSchema = z.object({
   description: z.string().max(5000).optional(),
   price_cents: z.number().int().min(0).max(100_000_000),
   price_type: z.enum(['fixed', 'starting_from', 'custom']),
-  duration_min: z.number().int().min(5).max(1440),
+  duration_min: z.number().int().min(0).max(1440), // 0 = not shown on the website
   included: z.array(z.string().max(200)).max(40).optional(),
   image_url: z.string().max(2000).nullable().optional(),
   gallery: z.array(z.string().max(2000)).max(30).optional(),

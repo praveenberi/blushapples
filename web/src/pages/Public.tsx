@@ -47,7 +47,7 @@ export function Services() {
   const cats = useMemo(() => (site?.categories || []).filter((c) => services?.some((s) => s.category_id === c.id)), [site, services]);
   const list = (services || []).filter((s) => cat === 'all' || s.category_slug === cat);
   const galleryCat = matchGalleryCat([cats.find((c) => c.slug === cat)?.name], useGalleryCats());
-  const jsonLd = services ? { '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: services.slice(0, 20).map((s, i) => ({ '@type': 'ListItem', position: i + 1, item: { '@type': 'Service', name: s.name, description: s.description, offers: s.price_type !== 'custom' ? { '@type': 'Offer', price: (s.price_cents / 100).toFixed(2), priceCurrency: site?.settings.general?.currency || 'USD' } : undefined } })) } : undefined;
+  const jsonLd = services ? { '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: services.slice(0, 20).map((s, i) => ({ '@type': 'ListItem', position: i + 1, item: { '@type': 'Service', name: s.name, description: s.description, offers: s.price_type !== 'custom' && s.price_cents > 0 ? { '@type': 'Offer', price: (s.price_cents / 100).toFixed(2), priceCurrency: site?.settings.general?.currency || 'USD' } : undefined } })) } : undefined;
   useSeo('services', { jsonLd });
   return (
     <div className="pt-28 sm:pt-36"><div className="container-x pb-24">

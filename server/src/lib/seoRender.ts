@@ -53,7 +53,7 @@ export async function renderPage(db: Db, template: string, rawPath: string): Pro
       const svcs = await db.q<any>('SELECT name,description,price_cents,price_type FROM services WHERE deleted_at IS NULL AND available ORDER BY sort_order LIMIT 30');
       const cur = settings.general?.currency || 'USD';
       ld.push({ '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: svcs.map((s, i) => ({ '@type': 'ListItem', position: i + 1, item: { '@type': 'Service', name: s.name, description: s.description,
-        offers: s.price_type !== 'custom' ? { '@type': 'Offer', price: (s.price_cents / 100).toFixed(2), priceCurrency: cur } : undefined } })) });
+        offers: s.price_type !== 'custom' && s.price_cents > 0 ? { '@type': 'Offer', price: (s.price_cents / 100).toFixed(2), priceCurrency: cur } : undefined } })) });
       items.push('<ul>' + svcs.map((s) => `<li><strong>${esc(s.name)}</strong> ${esc(s.description)}</li>`).join('') + '</ul>');
     }
     if (slug === 'contact' && (contact.phone || contact.email)) items.push(`<p>${esc(contact.phone)} ${esc(contact.email)} ${esc(contact.address)}</p>`);

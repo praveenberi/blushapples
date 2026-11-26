@@ -88,12 +88,16 @@ export function whatsappUrl(site: SiteData | null, message?: string) {
 /** Pre-filled WhatsApp enquiry for a service (template editable in admin). */
 export function whatsappServiceUrl(site: SiteData | null, svc: { name: string; price_cents: number; price_type: string }, money: (c: number) => string, date?: string) {
   const tpl: string = site?.settings.whatsapp?.serviceTemplate || 'Hi, I would like to enquire about {{service}}.';
-  const price = svc.price_type === 'custom' ? 'Custom quotation' : `${svc.price_type === 'starting_from' ? 'From ' : ''}${money(svc.price_cents)}`;
-  const text = tpl.replace(/\{\{service\}\}/g, svc.name).replace(/\{\{price\}\}/g, price).replace(/\{\{date\}\}/g, date || 'To be confirmed').replace(/\{\{url\}\}/g, location.origin);
+  const price = svc.price_type === 'custom' ? 'Custom quotation' : priceLabel(svc, money);
+  // With no price, drop the template's price line instead of sending an empty or zero one.
+  const lines = tpl.split('\n');
+  const base = !price && lines.length > 1 ? lines.filter((l) => !l.includes('{{price}}')).join('\n') : tpl;
+  const text = base.replace(/\{\{service\}\}/g, svc.name).replace(/\{\{price\}\}/g, price).replace(/\{\{date\}\}/g, date || 'To be confirmed').replace(/\{\{url\}\}/g, location.origin);
   return whatsappUrl(site, text);
 }
 
 export const priceLabel = (s: { price_cents: number; price_type: string }, money: (c: number) => string) =>
-  s.price_type === 'custom' ? 'Custom quote' : `${s.price_type === 'starting_from' ? 'From ' : ''}${money(s.price_cents)}`;
+  s.price_type === 'custom' ? 'Custom quote' : !s.price_cents ? '' : `${s.price_type === 'starting_from' ? 'From ' : ''}${money(s.price_cents)}`;
 
-export const fmtDuration = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}` : `${m}m`);
+/** Empty for 0, so callers can leave the detail out. */
+export const fmtDuration = (m: number) => (!m ? '' : m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}` : `${m}m`);

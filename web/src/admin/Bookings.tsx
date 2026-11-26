@@ -96,7 +96,7 @@ function ManualBooking({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const svc = services?.find((s) => s.id === f.serviceId);
-  useEffect(() => { if (svc && f.date) api.get(`/admin/bookings/slots?date=${f.date}&duration=${svc.duration_min}&location=${f.locationType}`).then(setSlots).catch(() => setSlots([])); }, [svc?.id, f.date, f.locationType]); // eslint-disable-line
+  useEffect(() => { if (svc && f.date) api.get(`/admin/bookings/slots?date=${f.date}&duration=${svc.duration_min || 60}&location=${f.locationType}`).then(setSlots).catch(() => setSlots([])); }, [svc?.id, f.date, f.locationType]); // eslint-disable-line
   const submit = async () => {
     setBusy(true); setErr(null);
     try {

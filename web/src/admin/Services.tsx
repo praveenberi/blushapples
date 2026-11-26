@@ -10,7 +10,7 @@ const FIELDS: FieldDef[] = [
   { key: 'category_id', label: 'Category', type: 'select', half: true, options: [] },
   { key: 'price_type', label: 'Price type', type: 'select', half: true, options: [['fixed', 'Fixed price'], ['starting_from', 'Starting from'], ['custom', 'Custom quotation']] },
   { key: 'price_cents', label: 'Price', type: 'money', half: true, show: (v) => v.price_type !== 'custom', help: 'In your site currency.' },
-  { key: 'duration_min', label: 'Duration (minutes)', type: 'number', half: true, min: 5 },
+  { key: 'duration_min', label: 'Duration (minutes)', type: 'number', half: true, min: 0, help: 'Use 0 to hide the time on the website. The calendar still reserves 60 minutes.' },
   { key: 'description', label: 'Description', type: 'textarea' },
   { key: 'included', label: 'Included items', type: 'lines' },
   { key: 'image_url', label: 'Service image', type: 'image' },
@@ -73,7 +73,7 @@ function ServiceList() {
             <Reorder.Item key={s.id} value={s} onDragEnd={() => api.post('/admin/services/reorder', { ids: data.map((x) => x.id) }).catch((e) => toast(errorMessage(e), 'err'))} className={`admin-card flex flex-wrap items-center gap-3 p-3 ${s.available ? '' : 'opacity-55'}`}>
               <span className="cursor-grab px-1 text-charcoal/35" aria-label="Drag to reorder">⋮⋮</span>
               {s.image_url ? <img src={s.image_url} alt="" className="h-12 w-12 object-cover" /> : <span className="h-12 w-12 bg-nude" />}
-              <div className="min-w-40 flex-1"><p className="font-medium">{s.name} {s.is_demo && <span className="badge ml-1">Demo</span>}</p><p className="text-xs text-charcoal/55">{s.category_name || 'Uncategorised'} · {fmtDuration(s.duration_min)} · {priceLabel(s, money)}</p></div>
+              <div className="min-w-40 flex-1"><p className="font-medium">{s.name} {s.is_demo && <span className="badge ml-1">Demo</span>}</p><p className="text-xs text-charcoal/55">{[s.category_name || 'Uncategorised', fmtDuration(s.duration_min), priceLabel(s, money)].filter(Boolean).join(' · ')}</p></div>
               <div className="flex gap-1.5 text-xs">{s.featured && <Bool v yes="Featured" />}{!s.available && <span className="badge">Hidden</span>}{!s.bookable && <span className="badge">Not bookable</span>}</div>
               <div className="flex gap-1">
                 <button className="btn btn-ghost btn-sm !px-2" onClick={() => run(() => api.put(`/admin/services/${s.id}`, { available: !s.available }), s.available ? 'Hidden from website' : 'Visible on website')}>{s.available ? 'Hide' : 'Show'}</button>

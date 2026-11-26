@@ -96,12 +96,15 @@ export async function applyPromo(q: Q, code: string | undefined, subtotal: numbe
   return { discount, code: p.promo_code as string };
 }
 
+/** A service saved with duration 0 has no published time; this much calendar time is still reserved for it, so it can't be double booked. */
+export const UNTIMED_SERVICE_MIN = 60;
+
 export async function resolveItems(q: Q, serviceIds: number[], addonIds: number[]) {
   const services = await q<any>('SELECT * FROM services WHERE id = ANY($1::int[]) AND deleted_at IS NULL AND available AND bookable', [serviceIds]);
   if (services.length !== new Set(serviceIds).size) throw new HttpError(400, 'One or more services are unavailable for booking');
   const addons = addonIds.length ? await q<any>('SELECT * FROM service_addons WHERE id = ANY($1::int[])', [addonIds]) : [];
   if (addons.length !== new Set(addonIds).size || addons.some((a) => !serviceIds.includes(a.service_id))) throw new HttpError(400, 'Invalid add-on selection');
-  const duration = [...services, ...addons].reduce((n, x) => n + x.duration_min, 0);
+  const duration = services.reduce((n, x) => n + (x.duration_min || UNTIMED_SERVICE_MIN), 0) + addons.reduce((n, x) => n + x.duration_min, 0);
   const subtotal = [...services, ...addons].reduce((n, x) => n + x.price_cents, 0);
   return { services, addons, duration, subtotal };
 }
