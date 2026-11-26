@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { galleryHref, matchGalleryCat, useGalleryCats } from '../lib/galleryLink';
 import { track, useSite } from '../lib/site';
 import { useSeo } from '../lib/seo';
 import { Empty, Item, Lightbox, PageLoader, Reveal, SectionHeading, Stagger } from '../components/ui';
@@ -45,6 +46,7 @@ export function Services() {
   useEffect(() => { api.get('/public/services').then(setServices).catch(() => setServices([])); }, []);
   const cats = useMemo(() => (site?.categories || []).filter((c) => services?.some((s) => s.category_id === c.id)), [site, services]);
   const list = (services || []).filter((s) => cat === 'all' || s.category_slug === cat);
+  const galleryCat = matchGalleryCat([cats.find((c) => c.slug === cat)?.name], useGalleryCats());
   const jsonLd = services ? { '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: services.slice(0, 20).map((s, i) => ({ '@type': 'ListItem', position: i + 1, item: { '@type': 'Service', name: s.name, description: s.description, offers: s.price_type !== 'custom' ? { '@type': 'Offer', price: (s.price_cents / 100).toFixed(2), priceCurrency: site?.settings.general?.currency || 'USD' } : undefined } })) } : undefined;
   useSeo('services', { jsonLd });
   return (
@@ -61,6 +63,7 @@ export function Services() {
         <motion.div layout className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence mode="popLayout">{list.map((s) => <motion.div layout key={s.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><Stagger><ServiceCard s={s} /></Stagger></motion.div>)}</AnimatePresence>
         </motion.div>)}
+      <div className="mt-12 text-center"><Link to={galleryHref(galleryCat)} className="btn btn-outline">{galleryCat ? `Explore ${galleryCat.name} gallery` : 'Explore gallery'}</Link></div>
     </div></div>
   );
 }
@@ -68,7 +71,10 @@ export function Services() {
 export function Portfolio() {
   useSeo('portfolio');
   const [data, setData] = useState<any | null>(null);
-  const [cat, setCat] = useState('');
+  // The category lives in the URL, so "Explore gallery" buttons can link straight to it.
+  const [params, setParams] = useSearchParams();
+  const cat = params.get('category') || '';
+  const setCat = (slug: string) => setParams(slug ? { category: slug } : {}, { replace: true });
   const [album, setAlbum] = useState('');
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('custom');

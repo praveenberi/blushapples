@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { galleryHref, matchGalleryCat, useGalleryCats } from '../lib/galleryLink';
 import { fmtDuration, priceLabel, track, useSite, whatsappServiceUrl, whatsappUrl } from '../lib/site';
 import { BeforeAfter, Icon, Img, Item, Lightbox, Reveal, SectionHeading, Stagger, type LightboxItem } from '../components/ui';
 import { ContactForm } from './Contact';
@@ -10,6 +11,7 @@ type Sec = { id: number; type: string; content: Record<string, any> };
 
 export function ServiceCard({ s }: { s: any }) {
   const { site, money } = useSite();
+  const galleryCat = matchGalleryCat([s.name, s.category_name], useGalleryCats());
   return (
     <Item className="group flex flex-col bg-paper">
       <Img src={s.image_url} alt={s.name} ratio="4/3" className="transition-transform duration-700 group-hover:scale-[1.02]" />
@@ -24,6 +26,7 @@ export function ServiceCard({ s }: { s: any }) {
           {s.bookable && <Link to={`/book?service=${s.id}`} onClick={() => track('booking_click', String(s.id))} className="btn btn-solid btn-sm flex-1">Book</Link>}
           <a href={whatsappServiceUrl(site, s, money)} target="_blank" rel="noopener noreferrer" onClick={() => track('whatsapp_click', String(s.id))} className="btn btn-outline btn-sm" aria-label={`Enquire about ${s.name} on WhatsApp`}><Icon name="whatsapp" className="h-4 w-4" />WhatsApp</a>
         </div>
+        <Link to={galleryHref(galleryCat)} className="btn btn-ghost btn-sm mt-2 w-full justify-center">{galleryCat ? `Explore ${galleryCat.name} gallery` : 'Explore gallery'} →</Link>
       </div>
     </Item>
   );
