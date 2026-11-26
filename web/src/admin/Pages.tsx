@@ -16,7 +16,7 @@ const sectionFields: FieldDef[] = [
   { key: 'visible', label: 'Visibility', type: 'bool', help: 'Show this section on the website' },
   { key: 'content.eyebrow', label: 'Small heading above', half: true, show: (v) => v.type !== 'list' }, { key: 'content.heading', label: 'Heading' },
   { key: 'content.body', label: 'Text', type: 'textarea', show: (v) => v.type !== 'list' && !['featured_gallery', 'before_after'].includes(v.type) || ['featured_gallery', 'before_after'].includes(v.type) },
-  { key: 'content.image', label: 'Image', type: 'image', show: has('hero', 'story', 'image_text'), help: 'Leave empty to use a featured gallery photo' },
+  { key: 'content.image', label: 'Image', type: 'image', show: has('hero', 'story', 'image_text'), help: 'If empty, Brand story uses your About page photo. Brand story and Hero can also use a featured gallery photo.' },
   { key: 'content.images', label: 'Hero slideshow images', type: 'images', show: has('hero'), help: 'Add two or more to crossfade automatically (overrides the single image). Order = display order.' },
   { key: 'content.slideSeconds', label: 'Seconds per image', type: 'number', half: true, min: 3, max: 15, show: has('hero') },
   { key: 'content.video', label: 'Hero video URL (optional, mp4)', show: has('hero'), help: 'If set, the video is used instead of images.' },

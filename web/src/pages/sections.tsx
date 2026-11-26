@@ -133,7 +133,9 @@ function BeforeAfterSection({ c }: { c: Record<string, any> }) {
 
 function Story({ c }: { c: Record<string, any> }) {
   const { site } = useSite();
-  const img = c.image || site?.featuredGallery[1]?.display_url;
+  // Its own photo first; otherwise reuse the About page photo, then a featured gallery photo.
+  const aboutImg = site?.sections.find((s) => s.page === 'about' && s.content.image)?.content.image;
+  const img = c.image || aboutImg || site?.featuredGallery[1]?.display_url || site?.featuredGallery[0]?.display_url;
   return (
     <section className="section-y"><div className="container-x grid items-center gap-12 md:grid-cols-2">
       <Reveal><Img src={img} alt={c.heading || 'The artist'} ratio="4/5" /></Reveal>
