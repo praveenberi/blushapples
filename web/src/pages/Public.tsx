@@ -46,7 +46,8 @@ export function Services() {
   useEffect(() => { api.get('/public/services').then(setServices).catch(() => setServices([])); }, []);
   const cats = useMemo(() => (site?.categories || []).filter((c) => services?.some((s) => s.category_id === c.id)), [site, services]);
   const list = (services || []).filter((s) => cat === 'all' || s.category_slug === cat);
-  const galleryCat = matchGalleryCat([cats.find((c) => c.slug === cat)?.name], useGalleryCats());
+  const selectedName = cats.find((c) => c.slug === cat)?.name;
+  const galleryCat = matchGalleryCat([selectedName], useGalleryCats());
   const jsonLd = services ? { '@context': 'https://schema.org', '@type': 'ItemList', itemListElement: services.slice(0, 20).map((s, i) => ({ '@type': 'ListItem', position: i + 1, item: { '@type': 'Service', name: s.name, description: s.description, offers: s.price_type !== 'custom' && s.price_cents > 0 ? { '@type': 'Offer', price: (s.price_cents / 100).toFixed(2), priceCurrency: site?.settings.general?.currency || 'USD' } : undefined } })) } : undefined;
   useSeo('services', { jsonLd });
   return (
@@ -63,7 +64,7 @@ export function Services() {
         <motion.div layout className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence mode="popLayout">{list.map((s) => <motion.div layout key={s.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><Stagger><ServiceCard s={s} /></Stagger></motion.div>)}</AnimatePresence>
         </motion.div>)}
-      <div className="mt-12 text-center"><Link to={galleryHref(galleryCat)} className="btn btn-outline">{galleryCat ? `Explore ${galleryCat.name} gallery` : 'Explore gallery'}</Link></div>
+      <div className="mt-12 text-center"><Link to={galleryHref(galleryCat, selectedName)} className="btn btn-outline">{galleryCat ? `Explore ${galleryCat.name} gallery` : 'Explore gallery'}</Link></div>
     </div></div>
   );
 }
@@ -101,7 +102,9 @@ export function Portfolio() {
           {data?.albums?.length > 0 && <select value={album} onChange={(e) => setAlbum(e.target.value)} aria-label="Album" className="input !w-auto !py-2"><option value="">All albums</option>{data.albums.map((a: any) => <option key={a.id} value={a.slug}>{a.title}</option>)}</select>}
         </div>
       </div>
-      {err ? <Empty title="Could not load the gallery" body="Please try again shortly." /> : !data ? <PageLoader /> : !items.length ? <Empty title="Nothing matches" body="Try a different category or search." /> : (
+      {err ? <Empty title="Could not load the gallery" body="Please try again shortly." /> : !data ? <PageLoader /> : !items.length ? (cat && !q && !album
+        ? <Empty title="No photos in this category yet" body="New work is added regularly." action={<button className="btn btn-outline" onClick={() => setCat('')}>View all photos</button>} />
+        : <Empty title="Nothing matches" body="Try a different category or search." />) : (
         <motion.div layout className="columns-2 gap-3 md:columns-3 lg:columns-4 lg:gap-4">
           <AnimatePresence>{items.map((g: any, i: number) => (
             <motion.button layout key={g.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, delay: Math.min(i, 8) * 0.03 }}

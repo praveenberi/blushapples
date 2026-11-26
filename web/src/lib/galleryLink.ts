@@ -18,13 +18,9 @@ export function matchGalleryCat(names: (string | undefined)[], cats: GalleryCat[
 }
 
 let cache: Promise<GalleryCat[]> | null = null;
-/** Gallery categories that have at least one published image, so no button leads to an empty page. */
 function loadCats() {
   cache ??= api.get('/public/gallery')
-    .then((d: any) => {
-      const used = new Set(d.items.map((i: any) => i.category_slug));
-      return (d.categories as GalleryCat[]).filter((c) => used.has(c.slug));
-    })
+    .then((d: any) => d.categories as GalleryCat[])
     .catch(() => { cache = null; return []; });
   return cache;
 }
@@ -35,4 +31,13 @@ export function useGalleryCats() {
   return cats;
 }
 
-export const galleryHref = (cat?: GalleryCat) => (cat ? `/portfolio?category=${cat.slug}` : '/portfolio');
+const slugify = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+/**
+ * Always filtered to the selected category. With no matching gallery category the portfolio shows
+ * "no photos yet" for it instead of every photo. Only with no category at all does it show everything.
+ */
+export const galleryHref = (cat?: GalleryCat, categoryName?: string) => {
+  const slug = cat?.slug || slugify(categoryName || '');
+  return slug ? `/portfolio?category=${slug}` : '/portfolio';
+};
