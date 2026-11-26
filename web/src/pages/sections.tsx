@@ -14,20 +14,21 @@ export function ServiceCard({ s }: { s: any }) {
   const galleryCat = matchGalleryCat([s.name, s.category_name], useGalleryCats());
   return (
     <Item className="group flex flex-col bg-paper">
-      <Img src={s.image_url} alt={s.name} ratio="4/3" className="transition-transform duration-700 group-hover:scale-[1.02]" />
+      <Link to={galleryHref(galleryCat)} aria-label={galleryCat ? `Explore ${galleryCat.name} gallery` : 'Explore gallery'} className="block overflow-hidden">
+        <Img src={s.image_url} alt={s.name} ratio="4/3" className="transition-transform duration-700 group-hover:scale-[1.02]" />
+      </Link>
       <div className="flex flex-1 flex-col p-6">
         {s.category_name && <p className="eyebrow mb-2">{s.category_name}</p>}
         <h3 className="text-2xl">{s.name}</h3>
         <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-charcoal/65">{s.description}</p>
-        <div className="mt-5 flex items-baseline justify-between border-t border-charcoal/10 pt-4">
+        <Link to={galleryHref(galleryCat)} className="btn btn-ghost btn-sm mt-4 self-start !px-0">{galleryCat ? `Explore ${galleryCat.name} gallery` : 'Explore gallery'} →</Link>
+        <div className="mt-3 flex items-baseline justify-between border-t border-charcoal/10 pt-4">
           <span className="font-heading text-xl">{priceLabel(s, money)}</span><span className="text-xs text-charcoal/55">{fmtDuration(s.duration_min)}</span>
         </div>
         <div className="mt-4 flex gap-2">
           {s.bookable && <Link to={`/book?service=${s.id}`} onClick={() => track('booking_click', String(s.id))} className="btn btn-solid btn-sm flex-1">Book</Link>}
           <a href={whatsappServiceUrl(site, s, money)} target="_blank" rel="noopener noreferrer" onClick={() => track('whatsapp_click', String(s.id))} className="btn btn-outline btn-sm" aria-label={`Enquire about ${s.name} on WhatsApp`}><Icon name="whatsapp" className="h-4 w-4" />WhatsApp</a>
-        </div>
-        <Link to={galleryHref(galleryCat)} className="btn btn-ghost btn-sm mt-2 w-full justify-center">{galleryCat ? `Explore ${galleryCat.name} gallery` : 'Explore gallery'} →</Link>
-      </div>
+        </div>      </div>
     </Item>
   );
 }
