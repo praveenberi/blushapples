@@ -1,3 +1,4 @@
+import Feedback from './pages/Feedback';
 import { MotionConfig } from 'framer-motion';
 import { lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -20,7 +21,7 @@ function PublicSite() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Home />} /><Route path="about" element={<About />} /><Route path="services" element={<Services />} /><Route path="portfolio" element={<Portfolio />} />
-        <Route path="book" element={<Book />} /><Route path="contact" element={<ContactPage />} /><Route path="promotions" element={<Promotions />} /><Route path="policy/:key" element={<Policy />} /><Route path="*" element={<NotFound />} />
+        <Route path="book" element={<Book />} /><Route path="contact" element={<ContactPage />} /><Route path="promotions" element={<Promotions />} /><Route path="feedback/:token" element={<Feedback />} /><Route path="policy/:key" element={<Policy />} /><Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );

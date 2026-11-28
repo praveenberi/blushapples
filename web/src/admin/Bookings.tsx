@@ -9,18 +9,36 @@ const COLORS: Record<string, string> = {
   new: 'bg-blush text-charcoal', pending_confirmation: 'bg-amber-100 text-amber-900', confirmed: 'bg-emerald-100 text-emerald-900', deposit_requested: 'bg-sky-100 text-sky-900',
   deposit_paid: 'bg-teal-100 text-teal-900', in_progress: 'bg-violet-100 text-violet-900', completed: 'bg-charcoal text-paper', cancelled: 'bg-gray-200 text-gray-600', rejected: 'bg-rose/20 text-rose',
 };
-const label = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+const label = (s: string) => (s === 'completed' ? 'Closed' : s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()));
+const received = (b: any) => b.deposit_cents + b.balance_paid_cents;
+const pendingOf = (b: any) => Math.max(0, b.total_cents - received(b));
+
+/** What happened when the customer was told about a change, with a one-tap WhatsApp fallback. */
+function CustomerNotice({ m, onClose }: { m: any; onClose: () => void }) {
+  const email: Record<string, string> = { sent: 'Email sent.', skipped: 'Email not sent: email (SMTP) is not set up on the server.', failed: 'Email failed to send. Check Settings > notification log.', off: 'Email not sent: no email address, or this template is switched off.' };
+  const wa: Record<string, string> = { sent: 'WhatsApp sent.', manual: 'WhatsApp is ready: tap the button, then press send.', failed: 'Automatic WhatsApp failed. Send it with the button.', no_number: 'No phone number for WhatsApp.' };
+  return (
+    <div role="status" className="border border-gold/50 bg-gold/10 p-3 text-sm">
+      <div className="flex items-start justify-between gap-3"><p className="font-medium">{m.kind === 'feedback' ? 'Feedback request' : m.kind === 'rescheduled' ? 'New time: customer message' : 'Customer message'}</p><button type="button" aria-label="Dismiss" onClick={onClose}>✕</button></div>
+      <p className="mt-1">{email[m.email]}</p><p>{wa[m.whatsapp]}</p>
+      {m.whatsappUrl && m.whatsapp !== 'sent' && <a className="btn btn-gold btn-sm mt-2" href={m.whatsappUrl} target="_blank" rel="noopener noreferrer">Send on WhatsApp</a>}
+    </div>
+  );
+}
 export const StatusBadge = ({ s }: { s: string }) => <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] ${COLORS[s] || 'bg-nude'}`}>{label(s)}</span>;
 
+const DEAD = ['cancelled', 'rejected'];
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
+function BookingDetail({ id, initialNotice, onClose, onChanged }: { id: number; initialNotice?: any; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
   const { money } = useSite();
   const { data: b, reload, error } = useLoad<any>(`/admin/bookings/${id}`);
   const [notes, setNotes] = useState<string | null>(null);
   const [assigned, setAssigned] = useState<string | null>(null);
-  const [total, setTotal] = useState<number | null>(null);
+  const [pay, setPay] = useState({ total: '', deposit: '', balance: '' });
+  const [tell, setTell] = useState(true);
+  const [notice, setNotice] = useState<any | null>(initialNotice || null);
   const [rs, setRs] = useState({ date: '', time: '' });
   const [slots, setSlots] = useState<{ start: string }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -28,7 +46,7 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
   const [services, setServices] = useState<any[]>([]);
   const [editItems, setEditItems] = useState<{ s: number[]; a: number[] } | null>(null);
 
-  useEffect(() => { if (b) { setNotes(b.internal_notes); setAssigned(b.assigned_to); setTotal(b.total_cents); setRs({ date: b.booking_date, time: '' }); } }, [b?.id, b?.updated_at]); // eslint-disable-line
+  useEffect(() => { if (b) { setNotes(b.internal_notes); setAssigned(b.assigned_to); setPay({ total: String(b.total_cents / 100), deposit: String(b.deposit_cents / 100), balance: String(b.balance_paid_cents / 100) }); setRs({ date: b.booking_date, time: '' }); } }, [b?.id, b?.updated_at]); // eslint-disable-line
   useEffect(() => {
     if (!b || !rs.date) return;
     api.get(`/admin/bookings/slots?date=${rs.date}&duration=${b.end_min - b.start_min}&location=${b.location_type}&exclude=${b.id}`).then(setSlots).catch(() => setSlots([]));
@@ -37,11 +55,15 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
 
   const act = async (fn: () => Promise<any>, ok: string) => {
     setBusy(true);
-    try { await fn(); toast(ok); reload(); onChanged(); } catch (e) { toast(errorMessage(e), 'err'); } finally { setBusy(false); }
+    try { const r = await fn(); if (r?.messages) setNotice(r.messages); toast(ok); reload(); onChanged(); } catch (e) { toast(errorMessage(e), 'err'); } finally { setBusy(false); }
   };
   if (error) return <ErrorNote message={error} />;
   if (!b) return <PageLoader />;
   const wa = (b.customer_whatsapp || b.customer_phone || '').replace(/[^\d]/g, '');
+  const cents = (v: string) => Math.max(0, Math.round(Number(v || 0) * 100));
+  const draft = { total_cents: cents(pay.total), deposit_cents: cents(pay.deposit), balance_paid_cents: cents(pay.balance) };
+  const over = received(draft) > draft.total_cents;
+  const setStatus = (status: string) => act(() => api.put(`/admin/bookings/${b.id}`, { status, notify: tell }), 'Status updated');
   const selected = editItems || { s: b.services.map((x: any) => x.service_id), a: b.addons.map((x: any) => x.addon_id) };
   const addonOptions = services.filter((s) => selected.s.includes(s.id)).flatMap((s) => s.addons);
 
@@ -68,21 +90,35 @@ function BookingDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
       {(b.special_requests || b.hairstyling || b.notes) && <div className="text-sm">{b.hairstyling && <p><span className="text-charcoal/55">Hair:</span> {b.hairstyling}</p>}{b.special_requests && <p><span className="text-charcoal/55">Requests:</span> {b.special_requests}</p>}{b.notes && <p><span className="text-charcoal/55">Notes:</span> {b.notes}</p>}</div>}
       {b.reference_images?.length > 0 && <div><p className="label">Reference images</p><div className="flex flex-wrap gap-2">{b.reference_images.map((u: string) => <a key={u} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="Reference" className="h-20 w-20 object-cover" /></a>)}</div></div>}
 
+      {notice && <CustomerNotice m={notice} onClose={() => setNotice(null)} />}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div><label className="label" htmlFor="bs">Status</label>
-          <select id="bs" className="input" value={b.status} disabled={busy} onChange={(e) => e.target.value === 'cancelled' ? setConfirmCancel(true) : act(() => api.put(`/admin/bookings/${b.id}`, { status: e.target.value }), 'Status updated')}>{STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></div>
+          <select id="bs" className="input" value={b.status} disabled={busy} onChange={(e) => e.target.value === 'cancelled' ? setConfirmCancel(true) : setStatus(e.target.value)}>{STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select>
+          <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={tell} onChange={(e) => setTell(e.target.checked)} />Message the customer when the status changes</label></div>
         <div><label className="label" htmlFor="ba">Assigned artist / staff</label><input id="ba" className="input" value={assigned ?? ''} onChange={(e) => setAssigned(e.target.value)} /></div>
-        <div><label className="label" htmlFor="bt">Total (override)</label><input id="bt" type="number" step="0.01" className="input" value={total == null ? '' : total / 100} onChange={(e) => setTotal(Math.round(Number(e.target.value) * 100))} /></div>
       </div>
+
+      <fieldset className="border border-charcoal/10 p-3"><legend className="label !mb-0 px-1">Payments</legend>
+        <div className="grid gap-3 sm:grid-cols-4">
+          {([['total', 'Total amount'], ['deposit', 'Deposit received'], ['balance', 'Balance received']] as const).map(([k, text]) => (
+            <div key={k}><label className="label" htmlFor={`pay-${k}`}>{text}</label><input id={`pay-${k}`} type="number" min={0} step="0.01" inputMode="decimal" className="input" value={pay[k]} onFocus={(e) => e.target.select()} onChange={(e) => setPay({ ...pay, [k]: e.target.value })} /></div>))}
+          <div><p className="label">Pending amount</p><p className={`py-2 font-heading text-2xl ${pendingOf(draft) > 0 ? 'text-rose' : ''}`}>{money(pendingOf(draft))}</p></div>
+        </div>
+        <p className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm"><span>Total received: <strong>{money(received(draft))}</strong> of {money(draft.total_cents)}</span>
+          {draft.total_cents > 0 && pendingOf(draft) > 0 && <button type="button" className="text-xs text-gold underline" onClick={() => setPay({ ...pay, balance: String((draft.total_cents - draft.deposit_cents) / 100) })}>Mark fully paid</button>}</p>
+        {over && <p role="alert" className="mt-1 text-xs text-rose">Payments received are more than the total amount.</p>}
+        <p className="mt-1 text-xs text-charcoal/50">Click Save details to keep these amounts. Save them before changing the status, so the customer's message shows the latest figures.</p>
+      </fieldset>
       <div><label className="label" htmlFor="bn">Internal notes (never shown to client)</label><textarea id="bn" rows={3} className="input" value={notes ?? ''} onChange={(e) => setNotes(e.target.value)} /></div>
-      <button className="btn btn-solid btn-sm" disabled={busy} onClick={() => act(() => api.put(`/admin/bookings/${b.id}`, { internal_notes: notes ?? '', assigned_to: assigned ?? '', total_cents: total ?? b.total_cents }), 'Saved')}>Save details</button>
+      <button className="btn btn-solid btn-sm" disabled={busy || over} onClick={() => act(() => api.put(`/admin/bookings/${b.id}`, { internal_notes: notes ?? '', assigned_to: assigned ?? '', ...draft }), 'Saved')}>Save details</button>
 
       <div className="border-t border-charcoal/10 pt-4"><p className="label">Reschedule</p>
         <div className="flex flex-wrap items-end gap-3"><input type="date" className="input !w-auto" value={rs.date} onChange={(e) => setRs({ date: e.target.value, time: '' })} aria-label="New date" />
           <select className="input !w-auto" value={rs.time} onChange={(e) => setRs({ ...rs, time: e.target.value })} aria-label="New time"><option value="">Select time</option>{slots.map((s) => <option key={s.start}>{s.start}</option>)}</select>
-          <button className="btn btn-outline btn-sm" disabled={busy || !rs.time} onClick={() => act(() => api.post(`/admin/bookings/${b.id}/reschedule`, rs), 'Rescheduled. Customer notified.')}>Reschedule</button></div>
+          <button className="btn btn-outline btn-sm" disabled={busy || !rs.time} onClick={() => act(() => api.post(`/admin/bookings/${b.id}/reschedule`, rs), 'Rescheduled')}>Reschedule</button></div>
         <p className="mt-1 text-xs text-charcoal/50">Duration {fmtDuration(b.end_min - b.start_min)}. Only free times are listed.</p></div>
-      <Confirm open={confirmCancel} confirmLabel="Cancel booking" message="Cancel this booking? The time slot is freed and the customer is notified." onNo={() => setConfirmCancel(false)} onYes={() => { setConfirmCancel(false); act(() => api.put(`/admin/bookings/${b.id}`, { status: 'cancelled' }), 'Booking cancelled'); }} />
+      <Confirm open={confirmCancel} confirmLabel="Cancel booking" message={`Cancel this booking? The time slot is freed${tell ? ' and the customer is messaged' : ''}.`} onNo={() => setConfirmCancel(false)} onYes={() => { setConfirmCancel(false); setStatus('cancelled'); }} />
       <button className="hidden" onClick={onClose} />
     </div>
   );
@@ -127,7 +163,9 @@ export default function Bookings() {
   const [cursor, setCursor] = useState(() => new Date());
   const [open, setOpen] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [dragNotice, setDragNotice] = useState<any | null>(null);
   const toast = useToast();
+  const { money } = useSite();
 
   const range = useMemo(() => {
     if (view === 'list') return { from: '', to: '' };
@@ -148,7 +186,7 @@ export default function Bookings() {
   const drop = async (id: number, date: string) => {
     const b = data?.find((x) => x.id === id);
     if (!b || b.booking_date === date) return;
-    try { await api.post(`/admin/bookings/${id}/reschedule`, { date, time: mins(b.start_min) }); toast(`Moved to ${date}`); reload(); } catch (e) { toast(errorMessage(e), 'err'); }
+    try { const r = await api.post(`/admin/bookings/${id}/reschedule`, { date, time: mins(b.start_min) }); toast(`Moved to ${date}`); reload(); setDragNotice(r.messages); setOpen(id); } catch (e) { toast(errorMessage(e), 'err'); }
   };
   const chip = (b: any) => (
     <button key={b.id} draggable onDragStart={(e) => e.dataTransfer.setData('text/plain', String(b.id))} onClick={() => setOpen(b.id)} title={`${b.customer_name} · ${b.service_names}`}
@@ -171,10 +209,15 @@ export default function Bookings() {
         <select className="input !w-auto !py-2" aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option>{STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select>
       </div>
       <ErrorNote message={error} />
+      {!!data?.length && (
+        <dl className="mb-4 grid gap-3 sm:grid-cols-3">{([['Total amount', (b: any) => b.total_cents], ['Received', received], ['Pending', pendingOf]] as const).map(([name, value]) => (
+          <div key={name} className="admin-card p-3"><dt className="label !mb-0">{name}</dt><dd className="font-heading text-2xl">{money(data.filter((b) => !DEAD.includes(b.status)).reduce((n, b) => n + value(b), 0))}</dd></div>))}
+          <p className="text-xs text-charcoal/45 sm:col-span-3">For the bookings shown, not counting cancelled or rejected ones.</p></dl>
+      )}
       {loading ? <PageLoader /> : view === 'list' ? (
         !data?.length ? <div className="admin-card p-10 text-center text-charcoal/60">No bookings match.</div> :
-          <div className="admin-card overflow-x-auto"><table className="w-full min-w-[640px]"><thead><tr><th className="admin-th">Ref</th><th className="admin-th">Client</th><th className="admin-th">Services</th><th className="admin-th">When</th><th className="admin-th">Status</th></tr></thead>
-            <tbody>{data.map((b) => <tr key={b.id} className="cursor-pointer hover:bg-nude/40" onClick={() => setOpen(b.id)}><td className="admin-td font-mono text-xs">{b.reference}</td><td className="admin-td">{b.customer_name}<span className="block text-xs text-charcoal/50">{b.customer_phone}</span></td><td className="admin-td max-w-[220px] truncate">{b.service_names}</td><td className="admin-td whitespace-nowrap">{b.booking_date} {mins(b.start_min)}</td><td className="admin-td"><StatusBadge s={b.status} /></td></tr>)}</tbody></table></div>
+          <div className="admin-card overflow-x-auto"><table className="w-full min-w-[900px]"><thead><tr><th className="admin-th">Ref</th><th className="admin-th">Client</th><th className="admin-th">Services</th><th className="admin-th">When</th><th className="admin-th">Total</th><th className="admin-th">Received</th><th className="admin-th">Pending</th><th className="admin-th">Status</th></tr></thead>
+            <tbody>{data.map((b) => <tr key={b.id} className="cursor-pointer hover:bg-nude/40" onClick={() => setOpen(b.id)}><td className="admin-td font-mono text-xs">{b.reference}</td><td className="admin-td">{b.customer_name}<span className="block text-xs text-charcoal/50">{b.customer_phone}</span></td><td className="admin-td max-w-[220px] truncate">{b.service_names}</td><td className="admin-td whitespace-nowrap">{b.booking_date} {mins(b.start_min)}</td><td className="admin-td whitespace-nowrap">{money(b.total_cents)}</td><td className="admin-td whitespace-nowrap">{money(received(b))}</td><td className={`admin-td whitespace-nowrap ${pendingOf(b) > 0 && !DEAD.includes(b.status) ? 'text-rose' : ''}`}>{DEAD.includes(b.status) ? '-' : money(pendingOf(b))}</td><td className="admin-td"><StatusBadge s={b.status} /></td></tr>)}</tbody></table></div>
       ) : (
         <div className={`grid gap-px bg-charcoal/10 ${view === 'day' ? 'grid-cols-1' : 'grid-cols-7'}`}>
           {view !== 'day' && ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="bg-paper py-1.5 text-center text-[11px] uppercase tracking-widest text-charcoal/50">{d}</div>)}
@@ -183,7 +226,7 @@ export default function Bookings() {
               <p className="mb-1 text-xs text-charcoal/50">{d.getDate()}</p>{list.map(chip)}</div>; })}
         </div>)}
       <p className="mt-3 text-xs text-charcoal/45">Tip: in the calendar views, drag a booking onto another day to reschedule it at the same time.</p>
-      <Modal open={open !== null} onClose={() => setOpen(null)} title="Booking" wide>{open !== null && <BookingDetail id={open} onClose={() => setOpen(null)} onChanged={reload} />}</Modal>
+      <Modal open={open !== null} onClose={() => { setOpen(null); setDragNotice(null); }} title="Booking" wide>{open !== null && <BookingDetail id={open} initialNotice={dragNotice} onClose={() => setOpen(null)} onChanged={reload} />}</Modal>
       <Modal open={creating} onClose={() => setCreating(false)} title="New booking">{creating && <ManualBooking onClose={() => setCreating(false)} onCreated={reload} />}</Modal>
     </div>
   );

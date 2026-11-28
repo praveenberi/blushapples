@@ -4,6 +4,8 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
 const env = process.env;
+/** Example files use CHANGE_ME; treat that as "not set up". */
+const real = (v?: string) => (v && v !== 'CHANGE_ME' ? v : '');
 const isProd = env.NODE_ENV === 'production';
 
 if (isProd && (!env.JWT_SECRET || env.JWT_SECRET.length < 32)) {
@@ -36,15 +38,19 @@ export const config = {
     key: env.AI_PROVIDER_KEY || '',
   },
   smtp: {
-    host: env.SMTP_HOST || '',
+    host: real(env.SMTP_HOST),
     port: Number(env.SMTP_PORT || 587),
     user: env.SMTP_USER || '',
     pass: env.SMTP_PASS || '',
     from: env.SMTP_FROM || 'Blush & Apples <no-reply@example.com>',
   },
   whatsapp: {
-    token: env.WHATSAPP_API_TOKEN || '',
-    phoneId: env.WHATSAPP_PHONE_NUMBER_ID || '',
+    token: real(env.WHATSAPP_API_TOKEN),
+    phoneId: real(env.WHATSAPP_PHONE_NUMBER_ID),
+    // Names of Meta-approved message templates. Customer messages can only be sent automatically with these.
+    updateTemplate: real(env.WHATSAPP_TEMPLATE_UPDATE),
+    feedbackTemplate: real(env.WHATSAPP_TEMPLATE_FEEDBACK),
+    templateLang: env.WHATSAPP_TEMPLATE_LANG || 'en',
     adminNumber: env.WHATSAPP_ADMIN_NUMBER || '',
   },
   seed: {

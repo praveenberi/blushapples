@@ -3,6 +3,7 @@ import { api, errorMessage, mins, toMins } from '../lib/api';
 import { applyTheme, useSite } from '../lib/site';
 import { ErrorNote, Modal, PageLoader, Spinner } from '../components/ui';
 import { Bool, Fields, PageHeader, ResourceManager, SettingsForm, useAuth, useLoad, useToast, type FieldDef } from './kit';
+import { FeedbackLinks } from './FeedbackLinks';
 
 const Tabs = <T extends string>({ tabs, value, onChange }: { tabs: [T, string][]; value: T; onChange: (t: T) => void }) => (
   <div className="mb-5 flex flex-wrap gap-1 border-b border-charcoal/10" role="tablist">{tabs.map(([t, l]) => <button key={t} role="tab" aria-selected={value === t} onClick={() => onChange(t)} className={`-mb-px border-b-2 px-4 py-2 text-xs uppercase tracking-widest ${value === t ? 'border-gold' : 'border-transparent text-charcoal/50 hover:text-charcoal'}`}>{l}</button>)}</div>
@@ -78,14 +79,15 @@ export function ContentAdmin() {
 }
 
 /* ============================== simple resources ============================== */
-export const TestimonialsAdmin = () => (
+export const TestimonialsAdmin = () => (<>
+  <FeedbackLinks />
   <ResourceManager title="Testimonial" sub="Only approved testimonials appear on the website. Demo reviews are labelled until you replace them." endpoint="/admin/testimonials" reorderable
     blank={{ customer_name: '', review: '', rating: 5, service_category: '', image_url: null, review_date: null, approved: true, featured: false }}
     fields={[{ key: 'customer_name', label: 'Customer name', required: true, half: true }, { key: 'service_category', label: 'Service category', half: true }, { key: 'review', label: 'Review', type: 'textarea', required: true },
       { key: 'rating', label: 'Rating (1-5)', type: 'number', half: true, min: 1, max: 5 }, { key: 'review_date', label: 'Date', type: 'date', half: true }, { key: 'image_url', label: 'Customer photo', type: 'image' },
       { key: 'approved', label: 'Approval', type: 'bool', half: true, help: 'Approved (visible)' }, { key: 'featured', label: 'Featured', type: 'bool', half: true, help: 'Show first' }, { key: 'is_demo', label: 'Demo content', type: 'bool', help: 'Labelled "Demo" on the website. Untick once this is a real review.' }]}
     columns={[{ label: 'Customer', render: (r) => <span>{r.customer_name} {r.is_demo && <span className="badge ml-1">Demo</span>}</span> }, { label: 'Rating', render: (r) => '★'.repeat(r.rating) }, { label: 'Review', render: (r) => <span className="line-clamp-1 max-w-xs">{r.review}</span> }, { label: 'Approved', render: (r) => <Bool v={r.approved} /> }, { label: 'Featured', render: (r) => <Bool v={r.featured} /> }]} />
-);
+</>);
 
 export const PromotionsAdmin = () => (
   <ResourceManager title="Promotion" endpoint="/admin/promotions" reorderable wide
@@ -230,7 +232,7 @@ function TemplatesEditor() {
   const save = async () => { try { await api.put(`/admin/templates/${open.key}`, { subject: open.subject, body: open.body, enabled: open.enabled }); toast('Template saved'); setOpen(null); reload(); } catch (e) { toast(errorMessage(e), 'err'); } };
   if (!data) return <PageLoader />;
   return (
-    <section className="admin-card mb-6 p-5"><h2 className="text-2xl">Email templates</h2><p className="mb-3 text-sm text-charcoal/60">Variables: {'{{name}} {{reference}} {{services}} {{date}} {{time}} {{venue}} {{total}} {{brand}} {{link}}'}. Emails are sent with your brand colours. Configure SMTP in the server environment.</p>
+    <section className="admin-card mb-6 p-5"><h2 className="text-2xl">Email & WhatsApp templates</h2><p className="mb-3 text-sm text-charcoal/60">Variables: {'{{name}} {{reference}} {{services}} {{date}} {{time}} {{venue}} {{total}} {{paid}} {{pending}} {{brand}} {{link}} {{status_label}} {{status_message}} {{feedback_link}}'}. Customer booking messages use the same wording for email and WhatsApp. Lines with no amount are left out. Configure SMTP in the server environment.</p>
       <ul className="divide-y divide-charcoal/10">{data.map((t) => <li key={t.key} className="flex items-center justify-between gap-3 py-2.5 text-sm"><span><strong>{t.subject}</strong><span className="block text-xs text-charcoal/50">{t.audience} · {t.key}</span></span><span className="flex items-center gap-2"><Bool v={t.enabled} yes="On" no="Off" /><button className="btn btn-ghost btn-sm" onClick={() => setOpen({ ...t })}>Edit</button></span></li>)}</ul>
       <h3 className="mt-6 text-xl">Recent delivery log</h3>
       {!logs.data?.length ? <p className="mt-1 text-sm text-charcoal/55">Nothing sent yet.</p> : <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-xs">{logs.data.map((l) => <li key={l.id} className="flex gap-2"><span className="w-28 shrink-0 text-charcoal/45">{new Date(l.created_at).toLocaleString()}</span><span className={`w-14 ${l.status === 'failed' ? 'text-rose' : ''}`}>{l.status}</span><span>{l.channel} · {l.template_key || ''} {l.recipient} {l.detail}</span></li>)}</ul>}
@@ -285,7 +287,7 @@ export function SettingsAdmin() {
       {tab === 'appearance' && <AppearanceTab />}
       {tab === 'booking' && (<><SettingsForm group="booking" title="Booking rules" fields={[{ key: 'slotIntervalMin', label: 'Time slot interval (min)', type: 'number', half: true }, { key: 'bufferMin', label: 'Buffer between appointments (min)', type: 'number', half: true }, { key: 'travelBufferMin', label: 'Extra travel time for on-location (min)', type: 'number', half: true }, { key: 'leadTimeHours', label: 'Minimum notice (hours)', type: 'number', half: true }, { key: 'maxAdvanceDays', label: 'Book up to (days ahead)', type: 'number', half: true }, { key: 'depositPercent', label: 'Deposit %', type: 'number', half: true }, { key: 'autoConfirm', label: 'Confirmation', type: 'bool', help: 'Auto-confirm new bookings' }]} />
         <HoursEditor /><BlockedDates /></>)}
-      {tab === 'whatsapp' && <SettingsForm group="whatsapp" title="WhatsApp button & messages" sub="WhatsApp number itself is under General. Click-to-chat works with no API. Server-side API alerts are configured via environment variables." fields={[{ key: 'visible', label: 'Floating button', type: 'bool', help: 'Show on every page' }, { key: 'position', label: 'Position', type: 'select', half: true, options: [['right', 'Bottom right'], ['left', 'Bottom left']] }, { key: 'color', label: 'Button colour', type: 'color', half: true }, { key: 'greeting', label: 'Default greeting', type: 'textarea' }, { key: 'serviceTemplate', label: 'Service enquiry message', type: 'textarea', help: 'Variables: {{service}} {{price}} {{date}} {{url}}' }]} />}
+      {tab === 'whatsapp' && <SettingsForm group="whatsapp" title="WhatsApp button & messages" sub="WhatsApp number itself is under General. Click-to-chat works with no API. Server-side API alerts are configured via environment variables." fields={[{ key: 'visible', label: 'Floating button', type: 'bool', help: 'Show on every page' }, { key: 'countryCode', label: 'Default country code for customers', half: true, placeholder: '65', help: 'Added to numbers typed without one. Blank uses your currency (SGD = 65).' }, { key: 'position', label: 'Position', type: 'select', half: true, options: [['right', 'Bottom right'], ['left', 'Bottom left']] }, { key: 'color', label: 'Button colour', type: 'color', half: true }, { key: 'greeting', label: 'Default greeting', type: 'textarea' }, { key: 'serviceTemplate', label: 'Service enquiry message', type: 'textarea', help: 'Variables: {{service}} {{price}} {{date}} {{url}}' }]} />}
       {tab === 'notifications' && (<><SettingsForm group="notifications" title="Admin notifications" fields={[{ key: 'adminEmail', label: 'Send admin emails to', help: 'Falls back to the contact email' }, { key: 'reminderHoursBefore', label: 'Client reminder timing (hours before)', type: 'number', half: true }]} /><TemplatesEditor /></>)}
       {tab === 'seo' && (<><SettingsForm group="seo" title="Search defaults & structured data" fields={[{ key: 'siteName', label: 'Site name', half: true }, { key: 'businessType', label: 'Schema.org type', half: true, type: 'select', options: [['MakeupArtist', 'MakeupArtist'], ['BeautySalon', 'BeautySalon'], ['HealthAndBeautyBusiness', 'HealthAndBeautyBusiness']] }, { key: 'defaultDescription', label: 'Default meta description', type: 'textarea' }, { key: 'priceRange', label: 'Price range', half: true, placeholder: '$$' }, { key: 'areaServed', label: 'Area served', half: true }]} />
         <SettingsForm group="analytics" title="Google Analytics 4" fields={[{ key: 'ga4Id', label: 'Measurement ID', placeholder: 'G-XXXXXXXXXX', help: 'Leave empty to disable.' }]} /><SeoPages /></>)}

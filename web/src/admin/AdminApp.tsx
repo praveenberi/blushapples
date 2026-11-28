@@ -129,8 +129,8 @@ function Dashboard() {
       <PageHeader title={`Welcome, ${user!.name.split(' ')[0]}`} sub={`Today is ${data.today}`} />
       {b && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Today" value={b.today} sub="appointments" /><Stat label="Upcoming" value={b.upcoming} /><Stat label="Awaiting confirmation" value={b.pending} />
-        <Stat label="Confirmed" value={b.confirmed} /><Stat label="Completed" value={b.completed} /><Stat label="All bookings" value={b.total} />
-        <Stat label="Revenue" value={money(b.revenue_cents)} sub="completed / paid" /><Stat label="Pipeline" value={money(b.pipeline_cents)} sub="confirmed, unpaid" /></div>}
+        <Stat label="Confirmed" value={b.confirmed} /><Stat label="Closed" value={b.completed} /><Stat label="All bookings" value={b.total} />
+        <Stat label="Revenue" value={money(b.revenue_cents)} sub="closed / paid" /><Stat label="Pipeline" value={money(b.pipeline_cents)} sub="confirmed, unpaid" /></div>}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         {data.todaysAppointments && <section className="admin-card p-5"><h2 className="mb-3 text-2xl">Today's schedule</h2>
           {!data.todaysAppointments.length ? <p className="text-sm text-charcoal/55">No appointments today.</p> : <ul className="divide-y divide-charcoal/10">{data.todaysAppointments.map((a: any) => <li key={a.id} className="flex justify-between gap-3 py-2.5 text-sm"><span><strong>{mins(a.start_min)}</strong> {a.customer_name}<span className="block text-xs text-charcoal/55">{a.service_names}</span></span><span className="badge h-fit">{a.status.replace(/_/g, ' ')}</span></li>)}</ul>}</section>}

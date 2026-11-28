@@ -20,7 +20,8 @@ export async function renderPage(db: Db, template: string, rawPath: string): Pro
   const [page] = slug ? await db.q<any>('SELECT * FROM pages WHERE slug=$1 AND visible', [slug]) : [];
   const title = page?.seo_title || (policy && POLICIES[policy] ? `${POLICIES[policy]} | ${brand.name}` : `${brand.name || 'Makeup Artist'}`);
   const desc = page?.seo_description || seo.defaultDescription || '';
-  const robots = isAdmin || !known ? 'noindex,nofollow' : page?.robots || 'index,follow';
+  const isPrivate = isAdmin || /^\/feedback\/[\w-]+$/.test(path);
+  const robots = isPrivate || !known ? 'noindex,nofollow' : page?.robots || 'index,follow';
   const canonical = page?.canonical_url || base + (path === '/' ? '/' : path);
   const og = page?.og_image ? new URL(page.og_image, base).href : '';
 
@@ -64,5 +65,5 @@ export async function renderPage(db: Db, template: string, rawPath: string): Pro
     .replace(/<title>[\s\S]*?<\/title>/i, '').replace(/<meta name="description"[^>]*>/i, '')
     .replace('</head>', `${tags.filter(Boolean).join('\n    ')}\n  </head>`)
     .replace('<div id="root"></div>', `<div id="root">${body}</div>`);
-  return { status: known || isAdmin ? 200 : 404, html };
+  return { status: known || isPrivate ? 200 : 404, html };
 }

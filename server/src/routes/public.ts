@@ -10,6 +10,7 @@ import { storeImageVariants } from '../lib/images';
 import { notify, whatsappAdmin } from '../lib/notify';
 import { adminEmail } from './bookings';
 import { localNow, setting } from '../lib/booking';
+import { config as appConfig } from '../config';
 
 const limiter = (n: number) => rateLimit({ windowMs: 15 * 60_000, limit: config.isTest ? 10_000 : n, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests. Please try again later.' } });
 
@@ -78,6 +79,37 @@ export function publicRouter() {
     void notify(req.db, 'admin_new_inquiry', await adminEmail(req.db), vars);
     void whatsappAdmin(req.db, `New inquiry from ${d.name}: ${d.message.slice(0, 120)}`);
     res.status(201).json({ ok: true, id: row.id });
+  }));
+
+  /* ---- customer feedback via a private one-time link ---- */
+  const openRequest = async (db: any, token: string) => {
+    const [row] = await db.q(`SELECT * FROM feedback_requests WHERE token=$1`, [token.slice(0, 64)]);
+    if (!row) throw new HttpError(404, 'This feedback link is not valid.');
+    if (row.used_at) throw new HttpError(410, 'Feedback has already been sent with this link. Thank you!');
+    if (new Date(row.expires_at).getTime() < Date.now()) throw new HttpError(410, 'This feedback link has expired.');
+    return row;
+  };
+
+  r.get('/feedback/:token', limiter(100), ah(async (req, res) => {
+    const f = await openRequest(req.db, req.params.token);
+    res.json({ customerName: f.customer_name, service: f.service_category });
+  }));
+
+  r.post('/feedback/:token', limiter(20), ah(async (req, res) => {
+    const d = parse(z.object({ name: z.string().trim().min(2).max(120), rating: z.number().int().min(1).max(5), review: z.string().trim().min(5).max(2000) }), req.body);
+    const f = await openRequest(req.db, req.params.token);
+    await req.db.tx(async (q) => {
+      const claimed = await q('UPDATE feedback_requests SET used_at=now() WHERE id=$1 AND used_at IS NULL RETURNING id', [f.id]);
+      if (!claimed.length) throw new HttpError(410, 'Feedback has already been sent with this link. Thank you!');
+      const today = localNow((await setting<any>(q, 'general', {})).timezone || 'UTC').date;
+      const [n] = await q<any>('SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM testimonials');
+      // Not approved: nothing appears on the website until staff approve it.
+      const [t] = await q<any>(`INSERT INTO testimonials(customer_name,review,rating,service_category,review_date,approved,sort_order) VALUES ($1,$2,$3,$4,$5,false,$6) RETURNING id`,
+        [d.name, d.review, d.rating, f.service_category, today, n.n]);
+      await q('UPDATE feedback_requests SET testimonial_id=$1 WHERE id=$2', [t.id, f.id]);
+    });
+    void notify(req.db, 'admin_new_feedback', await adminEmail(req.db), { name: d.name, rating: d.rating, review: d.review, link: `${appConfig.publicUrl}/admin/testimonials` });
+    res.status(201).json({ ok: true });
   }));
 
   /** Reference-photo upload for visitors: images only, tight rate limit, size-capped by multer. */

@@ -104,3 +104,14 @@ Be aware of these before going live:
   layout animations, `MotionConfig reducedMotion="user"`).
 - Only the API is covered by automated tests; the React UI was verified by hand in a browser, not by an automated suite.
 - No Postgres-specific verification: tests run on PGlite. Run the suite against your production Postgres version before launch.
+
+## Customer messages and feedback
+
+Changing a booking's status or time messages the customer. Marking a booking **Closed** sends a one-time feedback link; reviews stay hidden until approved. Staff can also create links under **Testimonials**.
+
+- **Email** needs the `SMTP_*` settings. Without them nothing is emailed, and the admin says so. Some hosts block SMTP ports on free plans.
+- **WhatsApp** is one tap by default: the admin shows **Send on WhatsApp** with the message already typed.
+- **Automatic WhatsApp** needs a WhatsApp Business Cloud API account, plus the `WHATSAPP_*` settings in `.env.example`. Meta must approve both templates. Suggested wording:
+  - Update: `Hi {{1}}, there is an update on your booking {{2}}: {{3}}. Appointment: {{4}}. Reply here if you have any questions.`
+  - Feedback: `Hi {{1}}, thank you for choosing Blush & Apples. Please share your feedback here: {{2}} Thank you!`
+- `PUBLIC_URL` must be your live address, because feedback links are built from it.

@@ -30,6 +30,17 @@ export function resourceRouter() {
     schema: z.object({ title: str(160).min(1), slug, description: str(2000).optional(), cover_url: url, visible: z.boolean().optional(), sort_order: sort }),
   }));
 
+  r.get('/feedback-links', requirePerm('testimonials'), ah(async (req, res) => {
+    const rows = await req.db.q<any>('SELECT f.*, b.reference FROM feedback_requests f LEFT JOIN bookings b ON b.id=f.booking_id ORDER BY f.id DESC LIMIT 50');
+    res.json(rows.map((f) => ({ ...f, url: feedbackUrl(f.token) })));
+  }));
+  r.post('/feedback-links', requirePerm('testimonials'), ah(async (req, res) => {
+    const d = parse(z.object({ customer_name: str(120).default(''), service_category: str(120).default('') }), req.body);
+    const row = await createFeedbackRequest(req.db.q, { customerName: d.customer_name, serviceCategory: d.service_category });
+    await audit(req, 'create', 'feedback_requests', row.id);
+    res.status(201).json({ ...row, url: feedbackUrl(row.token) });
+  }));
+
   r.use('/testimonials', crudRouter({
     table: 'testimonials', perm: 'testimonials',
     cols: { customer_name: 'text', image_url: 'text', review: 'text', rating: 'int', service_category: 'text', review_date: 'text', approved: 'bool', featured: 'bool', is_demo: 'bool', sort_order: 'int' },
@@ -103,6 +114,7 @@ export function resourceRouter() {
 
 import { ah, audit, HttpError, parse } from '../lib/http';
 import { insertDefaultSections } from '../seed';
+import { createFeedbackRequest, feedbackUrl } from '../lib/feedback';
 import { requirePerm } from '../lib/auth';
 
 /** notification_templates use a text primary key, so they get a small dedicated router. */

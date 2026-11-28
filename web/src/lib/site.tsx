@@ -70,7 +70,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 export type TrackType = 'pageview' | 'booking_click' | 'whatsapp_click' | 'call_click' | 'email_click' | 'form_submit' | 'gallery_view' | 'booking_complete';
 export function track(type: TrackType, ref?: string) {
   try {
-    const body = JSON.stringify({ type, path: location.pathname, ref });
+    const body = JSON.stringify({ type, path: location.pathname.replace(/^\/feedback\/.*/, '/feedback'), ref });
     if (navigator.sendBeacon) navigator.sendBeacon('/api/public/track', new Blob([body], { type: 'application/json' }));
     else fetch('/api/public/track', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true });
     (window as any).gtag?.('event', type, { page_path: location.pathname });

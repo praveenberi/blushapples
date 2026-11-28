@@ -4,8 +4,8 @@ import { ah, audit, hhmm, HttpError, parse, toMin } from '../lib/http';
 import { requirePerm } from '../lib/auth';
 import { bookingSchema, bookingSettings, computeSlots, createBooking, resolveItems, setting } from '../lib/booking';
 import { notify, whatsappAdmin } from '../lib/notify';
+import { bookingVars, messageCustomer } from '../lib/customerMessages';
 import type { Db } from '../db';
-import { config } from '../config';
 
 export const STATUSES = ['new', 'pending_confirmation', 'confirmed', 'deposit_requested', 'deposit_paid', 'in_progress', 'completed', 'cancelled', 'rejected'] as const;
 
@@ -28,12 +28,7 @@ export async function adminEmail(db: Db) {
 }
 
 export async function notifyBooking(db: Db, event: string, b: any) {
-  const brand = await setting<any>(db.q, 'brand', {});
-  const vars = {
-    brand: brand.name || 'Blush & Apples', name: b.customer_name, reference: b.reference, services: b.service_names,
-    date: b.booking_date, time: hhmm(b.start_min), venue: b.venue || b.location_type, total: (b.total_cents / 100).toFixed(2),
-    status: b.status, link: `${config.publicUrl}/admin/bookings`,
-  };
+  const vars = await bookingVars(db, b);
   const admin = await adminEmail(db);
   if (event === 'received') {
     await notify(db, 'booking_received', b.customer_email, vars);
@@ -95,6 +90,8 @@ export function publicBookingRouter() {
   return r;
 }
 
+const money = z.number().int().min(0).max(100_000_000);
+
 export function adminBookingRouter() {
   const r = Router();
   const g = requirePerm('bookings');
@@ -134,21 +131,32 @@ export function adminBookingRouter() {
     const id = Number(req.params.id);
     const d = parse(z.object({
       status: z.enum(STATUSES).optional(), internal_notes: z.string().max(5000).optional(), assigned_to: z.string().max(120).optional(),
-      total_cents: z.number().int().min(0).max(100_000_000).optional(), venue: z.string().max(500).optional(),
+      total_cents: money.optional(), deposit_cents: money.optional(), balance_paid_cents: money.optional(), venue: z.string().max(500).optional(),
+      notify: z.boolean().optional(),
     }), req.body) as Record<string, any>;
-    const [cur] = await req.db.q<any>('SELECT status FROM bookings WHERE id=$1 AND deleted_at IS NULL', [id]);
+    const { notify: wantsNotify = true, ...changes } = d;
+    const [cur] = await req.db.q<any>('SELECT status, total_cents, deposit_cents, balance_paid_cents FROM bookings WHERE id=$1 AND deleted_at IS NULL', [id]);
     if (!cur) throw new HttpError(404, 'Not found');
+    if (['total_cents', 'deposit_cents', 'balance_paid_cents'].some((k) => changes[k] !== undefined)) {
+      const next = { ...cur, ...changes };
+      if (next.deposit_cents + next.balance_paid_cents > next.total_cents) throw new HttpError(400, 'Payments received cannot be more than the total amount. Update the total first.');
+    }
     const sets: string[] = [], vals: any[] = [];
-    for (const [k, v] of Object.entries(d)) if (v !== undefined) { vals.push(v); sets.push(`${k}=$${vals.length}`); }
+    for (const [k, v] of Object.entries(changes)) if (v !== undefined) { vals.push(v); sets.push(`${k}=$${vals.length}`); }
     if (!sets.length) throw new HttpError(400, 'Nothing to update');
     await req.db.q(`UPDATE bookings SET ${sets.join(',')}, updated_at=now() WHERE id=$${vals.length + 1}`, [...vals, id]);
-    await audit(req, 'update', 'bookings', id, d);
+    await audit(req, 'update', 'bookings', id, changes);
     const b = await bookingDetail(req.db, id);
-    if (d.status && d.status !== cur.status) {
-      if (d.status === 'confirmed') void notifyBooking(req.db, 'confirmed', b);
-      if (d.status === 'cancelled') void notifyBooking(req.db, 'cancelled', b);
+    let messages = null;
+    if (changes.status && changes.status !== cur.status) {
+      if (changes.status === 'cancelled') {
+        const vars = await bookingVars(req.db, b);
+        void notify(req.db, 'admin_booking_cancelled', await adminEmail(req.db), vars);
+        void whatsappAdmin(req.db, `Booking ${vars.reference} cancelled (${vars.name}, ${vars.date})`);
+      }
+      if (wantsNotify) messages = await messageCustomer(req.db, b, changes.status);
     }
-    res.json(b);
+    res.json({ ...b, messages });
   }));
 
   r.post('/:id/reschedule', g, ah(async (req, res) => {
@@ -163,12 +171,11 @@ export function adminBookingRouter() {
       const start = toMin(d.time);
       if (!slots.some((s) => s.startMin === start)) throw new HttpError(409, 'That time overlaps another booking or is outside working hours');
       const block = b.block_end_min - b.start_min;
-      await q('UPDATE bookings SET booking_date=$1, start_min=$2, end_min=$3, block_end_min=$4, updated_at=now() WHERE id=$5', [d.date, start, start + duration, start + block, id]);
+      await q('UPDATE bookings SET booking_date=$1, start_min=$2, end_min=$3, block_end_min=$4, reminder_sent_at=NULL, updated_at=now() WHERE id=$5', [d.date, start, start + duration, start + block, id]);
     });
     await audit(req, 'reschedule', 'bookings', id, d);
     const b = await bookingDetail(req.db, id);
-    void notifyBooking(req.db, 'rescheduled', b);
-    res.json(b);
+    res.json({ ...b, messages: await messageCustomer(req.db, b, 'rescheduled') });
   }));
 
   /** Replace the services/add-ons of a booking, recalculating total and duration (no overlap allowed). */
@@ -188,7 +195,7 @@ export function adminBookingRouter() {
       await q('DELETE FROM booking_addons WHERE booking_id=$1', [id]);
       for (const s of services) await q('INSERT INTO booking_services(booking_id,service_id,name,price_cents,duration_min) VALUES ($1,$2,$3,$4,$5)', [id, s.id, s.name, s.price_cents, s.duration_min]);
       for (const a of addons) await q('INSERT INTO booking_addons(booking_id,addon_id,name,price_cents,duration_min) VALUES ($1,$2,$3,$4,$5)', [id, a.id, a.name, a.price_cents, a.duration_min]);
-      await q('UPDATE bookings SET total_cents=$1, end_min=$2, block_end_min=$3, updated_at=now() WHERE id=$4', [subtotal, b.start_min + duration, b.start_min + block, id]);
+      await q('UPDATE bookings SET total_cents=$1, end_min=$2, block_end_min=$3, updated_at=now() WHERE id=$4', [subtotal || b.total_cents, b.start_min + duration, b.start_min + block, id]);
     });
     await audit(req, 'update_items', 'bookings', id, d);
     res.json(await bookingDetail(req.db, id));
