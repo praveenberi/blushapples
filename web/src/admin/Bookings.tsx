@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, errorMessage, mins } from '../lib/api';
 import { useSite, fmtDuration } from '../lib/site';
 import { ErrorNote, Modal, PageLoader, Spinner } from '../components/ui';
@@ -18,7 +19,7 @@ function CustomerNotice({ m, onClose }: { m: any; onClose: () => void }) {
   const email: Record<string, string> = { sent: 'Email sent.', skipped: 'Email not sent: email (SMTP) is not set up on the server.', failed: 'Email failed to send. Check Settings > notification log.', off: 'Email not sent: no email address, or this template is switched off.' };
   const wa: Record<string, string> = { sent: 'WhatsApp sent.', manual: 'WhatsApp is ready: tap the button, then press send.', failed: 'Automatic WhatsApp failed. Send it with the button.', no_number: 'No phone number for WhatsApp.' };
   return (
-    <div role="status" className="border border-gold/50 bg-gold/10 p-3 text-sm">
+    <div role="status" ref={(el) => el?.scrollIntoView({ block: 'nearest' })} className="border border-gold/50 bg-gold/10 p-3 text-sm">
       <div className="flex items-start justify-between gap-3"><p className="font-medium">{m.kind === 'feedback' ? 'Feedback request' : m.kind === 'rescheduled' ? 'New time: customer message' : 'Customer message'}</p><button type="button" aria-label="Dismiss" onClick={onClose}>✕</button></div>
       <p className="mt-1">{email[m.email]}</p><p>{wa[m.whatsapp]}</p>
       {m.whatsappUrl && m.whatsapp !== 'sent' && <a className="btn btn-gold btn-sm mt-2" href={m.whatsappUrl} target="_blank" rel="noopener noreferrer">Send on WhatsApp</a>}
@@ -30,7 +31,7 @@ export const StatusBadge = ({ s }: { s: string }) => <span className={`inline-bl
 const DEAD = ['cancelled', 'rejected'];
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function BookingDetail({ id, initialNotice, onClose, onChanged }: { id: number; initialNotice?: any; onClose: () => void; onChanged: () => void }) {
+function BookingDetail({ id, initialNotice, onClose, onChanged, onMoved }: { id: number; initialNotice?: any; onClose: () => void; onChanged: () => void; onMoved: (date: string) => void }) {
   const toast = useToast();
   const { money } = useSite();
   const { data: b, reload, error } = useLoad<any>(`/admin/bookings/${id}`);
@@ -90,7 +91,7 @@ function BookingDetail({ id, initialNotice, onClose, onChanged }: { id: number; 
       {(b.special_requests || b.hairstyling || b.notes) && <div className="text-sm">{b.hairstyling && <p><span className="text-charcoal/55">Hair:</span> {b.hairstyling}</p>}{b.special_requests && <p><span className="text-charcoal/55">Requests:</span> {b.special_requests}</p>}{b.notes && <p><span className="text-charcoal/55">Notes:</span> {b.notes}</p>}</div>}
       {b.reference_images?.length > 0 && <div><p className="label">Reference images</p><div className="flex flex-wrap gap-2">{b.reference_images.map((u: string) => <a key={u} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="Reference" className="h-20 w-20 object-cover" /></a>)}</div></div>}
 
-      {notice && <CustomerNotice m={notice} onClose={() => setNotice(null)} />}
+      {notice && notice.kind !== 'rescheduled' && <CustomerNotice m={notice} onClose={() => setNotice(null)} />}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div><label className="label" htmlFor="bs">Status</label>
@@ -116,8 +117,14 @@ function BookingDetail({ id, initialNotice, onClose, onChanged }: { id: number; 
       <div className="border-t border-charcoal/10 pt-4"><p className="label">Reschedule</p>
         <div className="flex flex-wrap items-end gap-3"><input type="date" className="input !w-auto" value={rs.date} onChange={(e) => setRs({ date: e.target.value, time: '' })} aria-label="New date" />
           <select className="input !w-auto" value={rs.time} onChange={(e) => setRs({ ...rs, time: e.target.value })} aria-label="New time"><option value="">Select time</option>{slots.map((s) => <option key={s.start}>{s.start}</option>)}</select>
-          <button className="btn btn-outline btn-sm" disabled={busy || !rs.time} onClick={() => act(() => api.post(`/admin/bookings/${b.id}/reschedule`, rs), 'Rescheduled')}>Reschedule</button></div>
-        <p className="mt-1 text-xs text-charcoal/50">Duration {fmtDuration(b.end_min - b.start_min)}. Only free times are listed.</p></div>
+          <button className="btn btn-outline btn-sm" disabled={busy || !rs.time} onClick={() => act(async () => { const r = await api.post(`/admin/bookings/${b.id}/reschedule`, rs); onMoved(rs.date); return r; }, `Moved to ${rs.date} ${rs.time}`)}>Reschedule</button></div>
+        <p className="mt-1 text-xs text-charcoal/50">Duration {fmtDuration(b.end_min - b.start_min)}. Only free times are listed. Choose a time to enable Reschedule.</p>
+        {notice?.kind === 'rescheduled' && <div className="mt-3"><CustomerNotice m={notice} onClose={() => setNotice(null)} /></div>}
+        {b.reschedule_history?.length > 0 && <ul className="mt-3 space-y-1 text-xs text-charcoal/65" aria-label="Reschedule history">{[...b.reschedule_history].reverse().map((h: any) => <li key={h.at}>↻ Moved from <strong>{h.from}</strong> to <strong>{h.to}</strong> <span className="text-charcoal/45">(changed {new Date(h.at).toLocaleString()})</span></li>)}</ul>}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {b.whatsapp_links?.rescheduled && b.reschedule_history?.length > 0 && <a className="btn btn-gold btn-sm" href={b.whatsapp_links.rescheduled} target="_blank" rel="noopener noreferrer">WhatsApp the new time</a>}
+          {b.whatsapp_links?.reminder && <a className="btn btn-outline btn-sm" href={b.whatsapp_links.reminder} target="_blank" rel="noopener noreferrer">WhatsApp a reminder</a>}
+        </div></div>
       <Confirm open={confirmCancel} confirmLabel="Cancel booking" message={`Cancel this booking? The time slot is freed${tell ? ' and the customer is messaged' : ''}.`} onNo={() => setConfirmCancel(false)} onYes={() => { setConfirmCancel(false); setStatus('cancelled'); }} />
       <button className="hidden" onClick={onClose} />
     </div>
@@ -166,6 +173,12 @@ export default function Bookings() {
   const [dragNotice, setDragNotice] = useState<any | null>(null);
   const toast = useToast();
   const { money } = useSite();
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const wanted = Number(params.get('open'));
+    if (wanted) { setDragNotice(null); setOpen(wanted); setParams({}, { replace: true }); }
+  }, [params, setParams]);
+  const showDate = (date: string) => { const [y, m, d] = date.split('-').map(Number); setCursor(new Date(y, m - 1, d)); };
 
   const range = useMemo(() => {
     if (view === 'list') return { from: '', to: '' };
@@ -190,7 +203,7 @@ export default function Bookings() {
   };
   const chip = (b: any) => (
     <button key={b.id} draggable onDragStart={(e) => e.dataTransfer.setData('text/plain', String(b.id))} onClick={() => setOpen(b.id)} title={`${b.customer_name} · ${b.service_names}`}
-      className={`mb-1 block w-full truncate rounded px-1.5 py-1 text-left text-[11px] ${COLORS[b.status] || 'bg-nude'}`}>{mins(b.start_min)} {b.customer_name}</button>
+      className={`mb-1 block w-full truncate rounded px-1.5 py-1 text-left text-[11px] ${COLORS[b.status] || 'bg-nude'}`}>{b.reschedule_history?.length > 0 && <span aria-label="Rescheduled">↻ </span>}{mins(b.start_min)}{view !== 'month' && `-${mins(b.end_min)}`} {b.customer_name}</button>
   );
 
   const days = useMemo(() => {
@@ -217,7 +230,7 @@ export default function Bookings() {
       {loading ? <PageLoader /> : view === 'list' ? (
         !data?.length ? <div className="admin-card p-10 text-center text-charcoal/60">No bookings match.</div> :
           <div className="admin-card overflow-x-auto"><table className="w-full min-w-[900px]"><thead><tr><th className="admin-th">Ref</th><th className="admin-th">Client</th><th className="admin-th">Services</th><th className="admin-th">When</th><th className="admin-th">Total</th><th className="admin-th">Received</th><th className="admin-th">Pending</th><th className="admin-th">Status</th></tr></thead>
-            <tbody>{data.map((b) => <tr key={b.id} className="cursor-pointer hover:bg-nude/40" onClick={() => setOpen(b.id)}><td className="admin-td font-mono text-xs">{b.reference}</td><td className="admin-td">{b.customer_name}<span className="block text-xs text-charcoal/50">{b.customer_phone}</span></td><td className="admin-td max-w-[220px] truncate">{b.service_names}</td><td className="admin-td whitespace-nowrap">{b.booking_date} {mins(b.start_min)}</td><td className="admin-td whitespace-nowrap">{money(b.total_cents)}</td><td className="admin-td whitespace-nowrap">{money(received(b))}</td><td className={`admin-td whitespace-nowrap ${pendingOf(b) > 0 && !DEAD.includes(b.status) ? 'text-rose' : ''}`}>{DEAD.includes(b.status) ? '-' : money(pendingOf(b))}</td><td className="admin-td"><StatusBadge s={b.status} /></td></tr>)}</tbody></table></div>
+            <tbody>{data.map((b) => <tr key={b.id} className="cursor-pointer hover:bg-nude/40" onClick={() => setOpen(b.id)}><td className="admin-td font-mono text-xs">{b.reference}</td><td className="admin-td">{b.customer_name}<span className="block text-xs text-charcoal/50">{b.customer_phone}</span></td><td className="admin-td max-w-[220px] truncate">{b.service_names}</td><td className="admin-td whitespace-nowrap">{b.booking_date} {mins(b.start_min)}{b.reschedule_history?.length > 0 && <span className="block text-[11px] text-gold">↻ Rescheduled</span>}</td><td className="admin-td whitespace-nowrap">{money(b.total_cents)}</td><td className="admin-td whitespace-nowrap">{money(received(b))}</td><td className={`admin-td whitespace-nowrap ${pendingOf(b) > 0 && !DEAD.includes(b.status) ? 'text-rose' : ''}`}>{DEAD.includes(b.status) ? '-' : money(pendingOf(b))}</td><td className="admin-td"><StatusBadge s={b.status} /></td></tr>)}</tbody></table></div>
       ) : (
         <div className={`grid gap-px bg-charcoal/10 ${view === 'day' ? 'grid-cols-1' : 'grid-cols-7'}`}>
           {view !== 'day' && ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="bg-paper py-1.5 text-center text-[11px] uppercase tracking-widest text-charcoal/50">{d}</div>)}
@@ -226,7 +239,7 @@ export default function Bookings() {
               <p className="mb-1 text-xs text-charcoal/50">{d.getDate()}</p>{list.map(chip)}</div>; })}
         </div>)}
       <p className="mt-3 text-xs text-charcoal/45">Tip: in the calendar views, drag a booking onto another day to reschedule it at the same time.</p>
-      <Modal open={open !== null} onClose={() => { setOpen(null); setDragNotice(null); }} title="Booking" wide>{open !== null && <BookingDetail id={open} initialNotice={dragNotice} onClose={() => setOpen(null)} onChanged={reload} />}</Modal>
+      <Modal open={open !== null} onClose={() => { setOpen(null); setDragNotice(null); }} title="Booking" wide>{open !== null && <BookingDetail key={open} id={open} initialNotice={dragNotice} onClose={() => setOpen(null)} onChanged={reload} onMoved={showDate} />}</Modal>
       <Modal open={creating} onClose={() => setCreating(false)} title="New booking">{creating && <ManualBooking onClose={() => setCreating(false)} onCreated={reload} />}</Modal>
     </div>
   );

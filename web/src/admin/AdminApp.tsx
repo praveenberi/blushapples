@@ -1,3 +1,4 @@
+import { AlertCenter } from './AlertCenter';
 import { AnimatePresence, motion } from 'framer-motion';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -101,6 +102,7 @@ function Shell() {
   );
   return (
     <div className="min-h-screen bg-ivory lg:pl-60">
+      {can('bookings') && <AlertCenter />}
       <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-charcoal/10 bg-paper lg:block">{side}</aside>
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-charcoal/10 bg-paper px-4 lg:hidden">
         <button onClick={() => setOpen(true)} aria-label="Open menu" className="grid h-10 w-10 place-items-center text-xl">☰</button><span className="font-heading text-xl">Studio admin</span><span className="w-10" />
@@ -108,7 +110,7 @@ function Shell() {
       <AnimatePresence>{open && (<motion.div className="fixed inset-0 z-40 lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
         <div className="absolute inset-0 bg-charcoal/40" onClick={() => setOpen(false)} />
         <motion.aside initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }} transition={{ type: 'spring', stiffness: 340, damping: 34 }} className="absolute inset-y-0 left-0 w-64 bg-paper">{side}</motion.aside></motion.div>)}</AnimatePresence>
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-10"><Suspense fallback={<PageLoader />}><Outlet /></Suspense></main>
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-10 lg:pt-16"><Suspense fallback={<PageLoader />}><Outlet /></Suspense></main>
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { ah, audit, hhmm, HttpError, parse, toMin } from '../lib/http';
 import { requirePerm } from '../lib/auth';
 import { bookingSchema, bookingSettings, computeSlots, createBooking, resolveItems, setting } from '../lib/booking';
 import { notify, whatsappAdmin } from '../lib/notify';
-import { bookingVars, messageCustomer } from '../lib/customerMessages';
+import { bookingVars, messageCustomer, whatsappLink } from '../lib/customerMessages';
+import { adminAlerts } from '../lib/reminders';
 import type { Db } from '../db';
 
 export const STATUSES = ['new', 'pending_confirmation', 'confirmed', 'deposit_requested', 'deposit_paid', 'in_progress', 'completed', 'cancelled', 'rejected'] as const;
@@ -111,9 +112,20 @@ export function adminBookingRouter() {
     res.json(await computeSlots(req.db.q, { date: q.date, durationMin: q.duration, locationType: q.location, excludeBookingId: q.exclude, admin: true }));
   }));
 
+  r.get('/alerts', g, ah(async (req, res) => res.json(await adminAlerts(req.db))));
+
+  r.post('/alerts/seen', g, ah(async (req, res) => {
+    await req.db.q('UPDATE bookings SET admin_seen_at=now() WHERE admin_seen_at IS NULL');
+    res.json({ ok: true });
+  }));
+
   r.get('/:id', g, ah(async (req, res) => {
-    const b = await bookingDetail(req.db, Number(req.params.id));
+    const id = Number(req.params.id);
+    const b = await bookingDetail(req.db, id);
     if (!b) throw new HttpError(404, 'Not found');
+    await req.db.q('UPDATE bookings SET admin_seen_at=now() WHERE id=$1 AND admin_seen_at IS NULL', [id]);
+    // always available, so a message can still be sent after the notice has been closed
+    b.whatsapp_links = { rescheduled: await whatsappLink(req.db, b, 'booking_rescheduled'), reminder: await whatsappLink(req.db, b, 'booking_reminder') };
     res.json(b);
   }));
 
@@ -171,7 +183,9 @@ export function adminBookingRouter() {
       const start = toMin(d.time);
       if (!slots.some((s) => s.startMin === start)) throw new HttpError(409, 'That time overlaps another booking or is outside working hours');
       const block = b.block_end_min - b.start_min;
-      await q('UPDATE bookings SET booking_date=$1, start_min=$2, end_min=$3, block_end_min=$4, reminder_sent_at=NULL, updated_at=now() WHERE id=$5', [d.date, start, start + duration, start + block, id]);
+      const change = [{ from: `${b.booking_date} ${hhmm(b.start_min)}`, to: `${d.date} ${d.time}`, at: new Date().toISOString() }];
+      await q(`UPDATE bookings SET booking_date=$1, start_min=$2, end_min=$3, block_end_min=$4, reminder_sent_at=NULL, admin_alerted_at=NULL,
+        reschedule_history = reschedule_history || $6::jsonb, updated_at=now() WHERE id=$5`, [d.date, start, start + duration, start + block, id, JSON.stringify(change)]);
     });
     await audit(req, 'reschedule', 'bookings', id, d);
     const b = await bookingDetail(req.db, id);

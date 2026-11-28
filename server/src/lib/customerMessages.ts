@@ -53,6 +53,15 @@ export async function defaultCountryCode(db: Db) {
   return chosen || CODE_BY_CURRENCY[(await setting<any>(db.q, 'general', {})).currency] || '';
 }
 
+/** A ready-to-send WhatsApp link using the wording of an email template, without sending anything. */
+export async function whatsappLink(db: Db, b: any, key: 'booking_rescheduled' | 'booking_reminder') {
+  const to = waNumber(b.customer_whatsapp || b.customer_phone || '', await defaultCountryCode(db));
+  const [tpl] = await db.q<any>('SELECT body FROM notification_templates WHERE key=$1', [key]);
+  if (!to || !tpl) return null;
+  const vars = await bookingVars(db, b);
+  return `https://wa.me/${to}?text=${encodeURIComponent(render(dropEmptyLines(tpl.body, vars), vars))}`;
+}
+
 export interface CustomerMessages {
   email: Delivery;
   whatsapp: 'sent' | 'failed' | 'manual' | 'no_number';
